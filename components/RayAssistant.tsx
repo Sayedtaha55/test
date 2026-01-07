@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Sparkles, X, Send, ExternalLink, Loader2 } from 'lucide-react';
+import { Sparkles, X, Send, ExternalLink, Loader2, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RayDB } from '../constants';
 
@@ -25,7 +24,6 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
     setQuery('');
     setLoading(true);
 
-    // Fix: Await asynchronous RayDB calls
     const shops = await RayDB.getShops();
     const offers = await RayDB.getOffers();
     const currentShops = shops.map(s => `${s.name} في ${s.city}`).join(', ');
@@ -47,11 +45,23 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
 
       const text = response.text || "للأسف مقدرتش ألاقي تفاصيل دلوقت، جرب تسألني عن محل محدد.";
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      
+      // Extract unique and valid links from grounding metadata
+      const linksMap = new Map();
+      chunks.forEach((chunk: any) => {
+        if (chunk.web && chunk.web.uri) {
+          linksMap.set(chunk.web.uri, {
+            uri: chunk.web.uri,
+            title: chunk.web.title || 'المصدر'
+          });
+        }
+      });
+      const links = Array.from(linksMap.values());
 
       setMessages(prev => [...prev, { 
         role: 'ai', 
         content: text,
-        links: chunks.map((chunk: any) => chunk.web).filter(Boolean)
+        links: links.length > 0 ? links : undefined
       }]);
     } catch (error) {
       console.error(error);
@@ -81,7 +91,7 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
             </button>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-300">
                 <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-6">
@@ -98,14 +108,36 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}
               >
-                <div className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-[#00E5FF] text-slate-900 font-bold' : 'bg-slate-50 text-slate-700'}`}>
+                <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-[#00E5FF] text-slate-900 font-bold' : 'bg-slate-50 text-slate-700'}`}>
                   <p className="text-sm leading-relaxed">{msg.content}</p>
+                  
+                  {msg.links && msg.links.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-slate-200/50 space-y-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Globe size={12} className="text-[#00E5FF]" /> مصادر العروض الخارجية:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.links.map((link, idx) => (
+                          <a 
+                            key={idx} 
+                            href={link.uri} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-[#00E5FF] hover:border-[#00E5FF] hover:shadow-md transition-all"
+                          >
+                            <ExternalLink size={10} />
+                            {link.title.length > 25 ? link.title.substring(0, 25) + '...' : link.title}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </MotionDiv>
             ))}
             {loading && (
               <div className="flex justify-end">
-                <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-3 flex-row-reverse">
+                <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-3 flex-row-reverse shadow-sm">
                    <Loader2 className="w-4 h-4 animate-spin text-[#00E5FF]" />
                    <span className="text-xs font-black text-slate-400">بجمعلك أحسن الصفقات...</span>
                 </div>
