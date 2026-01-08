@@ -3,6 +3,7 @@
   "description": "منصة تجارة متكاملة تربط بين التجار والمستهلكين بذكاء اصطناعي وتجربة مستخدم مستقبلية.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }

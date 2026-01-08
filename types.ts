@@ -24,11 +24,16 @@ export interface Shop {
   pageDesign: ShopDesign;
   followers: number; 
   visitors: number; 
+  // تفاصيل إضافية للتواصل والمواعيد
+  phone?: string;
+  openingHours?: string;
+  addressDetailed?: string;
 }
 
 export interface Offer {
   id: string;
   shopId: string;
+  productId: string;
   shopName: string;
   shopLogo: string;
   title: string;

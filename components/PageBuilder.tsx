@@ -1,43 +1,115 @@
 
 import React, { useState, useEffect } from 'react';
 import { MOCK_SHOPS } from '../constants';
-// Added missing Loader2 import
-import { ChevronLeft, Save, Layout, Palette, Image as ImageIcon, Check, Monitor, Smartphone, Eye, Sparkles, Plus, HelpCircle, X, Menu, Sliders, Loader2 } from 'lucide-react';
+import { 
+  ChevronLeft, Save, Layout, Palette, Image as ImageIcon, Check, 
+  Monitor, Smartphone, Eye, Sparkles, Plus, HelpCircle, X, Menu, 
+  Sliders, Loader2, Wand2, RefreshCw 
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { GoogleGenAI } from "@google/genai";
+import { ApiService } from '../services/api.service';
+import { useToast } from './Toaster';
 
 const MotionDiv = motion.div as any;
 
 const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [config, setConfig] = useState(() => {
-    const saved = localStorage.getItem('ray_user');
-    const user = saved ? JSON.parse(saved) : null;
-    // استعادة التصميم الحقيقي إذا وجد
-    return MOCK_SHOPS[0].pageDesign;
-  });
-
+  const { addToast } = useToast();
+  const [shopId, setShopId] = useState<string>('');
+  const [config, setConfig] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('mobile');
   const [showSettingsMobile, setShowSettingsMobile] = useState(false);
+  
+  // AI Generation States
+  const [isAIGenOpen, setIsAIGenOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('modern luxury fashion boutique');
+  const [generatedImg, setGeneratedImg] = useState<string | null>(null);
 
-  const handleSave = () => {
+  useEffect(() => {
+    const loadCurrentDesign = async () => {
+      const savedUser = localStorage.getItem('ray_user');
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        setShopId(user.shopId);
+        const shops = await ApiService.getShops('');
+        const myShop = shops.find((s: any) => s.id === user.shopId);
+        if (myShop && myShop.pageDesign) {
+          setConfig(myShop.pageDesign);
+        } else {
+          setConfig(MOCK_SHOPS[0].pageDesign);
+        }
+      }
+    };
+    loadCurrentDesign();
+  }, []);
+
+  const handleSave = async () => {
+    if (!shopId) return;
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      // حفظ دائم في قاعدة البيانات
+      await ApiService.updateShopDesign(shopId, config);
       setIsSaving(false);
       setSaveSuccess(true);
-      setShowSettingsMobile(false);
+      addToast('تم حفظ تصميم المتجر بنجاح!', 'success');
       setTimeout(() => setSaveSuccess(false), 2000);
-    }, 1200);
+    } catch (e) {
+      setIsSaving(false);
+      addToast('فشل حفظ التصميم، حاول مرة أخرى', 'error');
+    }
   };
+
+  const generateAIBanner = async () => {
+    setIsGenerating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `A cinematic ultra-wide 16:9 banner shot of a ${aiPrompt} interior, ultra-modern hyper-realistic architectural design, minimalist luxury aesthetic, professional 8k photography, soft atmospheric lighting, no text, clean background.`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9"
+          }
+        }
+      });
+
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+          setGeneratedImg(imageUrl);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("AI Gen Error:", error);
+      addToast('فشل ذكاء تست في توليد الصورة حالياً', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const applyAIBanner = () => {
+    if (generatedImg) {
+      setConfig({ ...config, bannerUrl: generatedImg });
+      setIsAIGenOpen(false);
+      setGeneratedImg(null);
+    }
+  };
+
+  if (!config) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00E5FF]" /></div>;
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#F8F9FA] flex flex-col md:flex-row-reverse text-right font-sans overflow-hidden" dir="rtl">
       
-      {/* Control Sidebar - Floating Bottom Sheet on Mobile */}
+      {/* Control Sidebar */}
       <AnimatePresence>
         {(showSettingsMobile || window.innerWidth > 768) && (
           <>
-            {/* Overlay for mobile */}
             <MotionDiv 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowSettingsMobile(false)}
@@ -59,11 +131,11 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   onClick={handleSave}
                   disabled={isSaving}
                   className={`px-6 md:px-10 py-3 md:py-4 rounded-xl md:rounded-[2rem] font-black text-xs md:text-sm transition-all flex items-center gap-2 ${
-                    saveSuccess ? 'bg-green-500 text-white' : 'bg-slate-900 text-white'
+                    saveSuccess ? 'bg-green-500 text-white' : 'bg-slate-900 text-white shadow-xl'
                   }`}
                 >
                   {isSaving ? <Loader2 size={16} className="animate-spin" /> : saveSuccess ? <Check size={16} /> : <Save size={16} />}
-                  <span>{saveSuccess ? 'تم' : 'حفظ'}</span>
+                  <span>{saveSuccess ? 'تم الحفظ' : 'حفظ التصميم'}</span>
                 </button>
               </header>
 
@@ -114,11 +186,19 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex-row-reverse justify-end">
                     الغلاف <ImageIcon size={14} />
                   </label>
-                  <div className="relative rounded-3xl overflow-hidden aspect-video bg-slate-100 border-2 border-slate-50">
-                     <img src={config.bannerUrl} className="w-full h-full object-cover opacity-60" />
-                     <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="bg-white/90 px-4 py-2 rounded-xl font-black text-[10px]">تغيير الصورة</span>
-                     </div>
+                  <div className="space-y-4">
+                    <div className="relative rounded-3xl overflow-hidden aspect-video bg-slate-100 border-2 border-slate-50 group">
+                       <img src={config.bannerUrl} className="w-full h-full object-cover opacity-80" />
+                       <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="bg-white/90 px-4 py-2 rounded-xl font-black text-[10px]">تغيير يدوي</span>
+                       </div>
+                    </div>
+                    <button 
+                      onClick={() => setIsAIGenOpen(true)}
+                      className="w-full py-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl font-black text-xs text-slate-500 flex items-center justify-center gap-3 hover:bg-slate-100 hover:border-[#00E5FF] hover:text-[#00E5FF] transition-all"
+                    >
+                      <Wand2 size={16} /> توليد بالذكاء الاصطناعي
+                    </button>
                   </div>
                 </section>
               </div>
@@ -127,7 +207,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         )}
       </AnimatePresence>
 
-      {/* Live Preview - Main Area */}
+      {/* Live Preview */}
       <main className="flex-1 flex flex-col relative bg-[#F1F3F5] overflow-hidden">
         <header className="h-20 md:h-24 bg-white/60 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between px-6 md:px-12 sticky top-0 z-10">
            <button onClick={onClose} className="p-3 bg-white rounded-xl shadow-sm text-slate-900"><ChevronLeft className="rotate-180" /></button>
@@ -145,13 +225,11 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               previewMode === 'mobile' ? 'w-full max-w-[375px] min-h-[667px] rounded-[3rem] border-[10px] border-slate-900' : 'w-full max-w-5xl rounded-[3rem]'
             }`}
           >
-            {/* Banner Preview */}
             <div className="h-40 md:h-64 relative shrink-0">
                <img src={config.bannerUrl} className="w-full h-full object-cover" />
                <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent" />
             </div>
             
-            {/* Content Preview */}
             <div className={`p-8 -mt-16 relative flex flex-col items-center text-center gap-6`}>
                <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2.5rem] shadow-xl p-2 border border-slate-50">
                   <div className="w-full h-full bg-slate-50 rounded-[2rem] flex items-center justify-center font-black text-slate-200 border-2 border-dashed border-slate-100 overflow-hidden text-[8px]">LOGO</div>
@@ -162,7 +240,6 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                </div>
                <button className="px-10 py-4 rounded-2xl text-white font-black text-sm shadow-xl" style={{ backgroundColor: config.primaryColor }}>متابعة</button>
                
-               {/* Skeleton Content */}
                <div className="w-full mt-10 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {[1, 2].map(i => (
@@ -177,7 +254,6 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </MotionDiv>
         </div>
 
-        {/* Mobile FAB to open settings */}
         <button 
           onClick={() => setShowSettingsMobile(true)}
           className="md:hidden fixed bottom-6 left-6 w-16 h-16 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-2xl z-[210] active:scale-90 transition-transform"
@@ -185,6 +261,73 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
            <Sliders size={24} />
         </button>
       </main>
+
+      {/* AI Image Generation Modal */}
+      <AnimatePresence>
+        {isAIGenOpen && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+            <MotionDiv initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAIGenOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-xl" />
+            <MotionDiv 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-2xl rounded-[3rem] p-10 text-right overflow-hidden shadow-2xl"
+            >
+              <h2 className="text-3xl font-black mb-4 flex items-center gap-3">
+                توليد غلاف بذكاء تست <Sparkles className="text-[#00E5FF]" />
+              </h2>
+              <p className="text-slate-400 font-bold mb-8 text-sm">صف شكل المحل أو النشاط اللي بتدور عليه وهنصممهولك فوراً.</p>
+              
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-4">وصف النشاط</label>
+                  <select 
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold outline-none border-none text-right appearance-none"
+                  >
+                    <option value="modern luxury fashion boutique">محل ملابس فاخر وعصري</option>
+                    <option value="minimalist high-tech electronics store">محل إلكترونيات مستقبلي</option>
+                    <option value="cozy minimalist restaurant interior">مطعم دافئ وبسيط</option>
+                    <option value="professional modern office for services">مكتب خدمات مهني</option>
+                    <option value="luxury cafe with warm lighting">كافيه فاخر بإضاءة دافئة</option>
+                  </select>
+                </div>
+
+                <div className="relative aspect-video rounded-[2rem] overflow-hidden bg-slate-900 border-2 border-slate-100 group shadow-lg">
+                  {generatedImg ? (
+                    <img src={generatedImg} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-4">
+                      {isGenerating ? <RefreshCw className="w-12 h-12 animate-spin text-[#00E5FF]" /> : <ImageIcon className="w-12 h-12 opacity-10" />}
+                      <p className="text-xs font-black uppercase tracking-tighter">{isGenerating ? 'جاري رسم الغلاف...' : 'صورة الغلاف ستظهر هنا'}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-4">
+                  <button 
+                    disabled={isGenerating}
+                    onClick={generateAIBanner}
+                    className="flex-1 py-5 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl"
+                  >
+                    {isGenerating ? <Loader2 className="animate-spin" /> : <Wand2 size={20} />}
+                    {isGenerating ? 'جاري التوليد...' : 'توليد تصميم جديد'}
+                  </button>
+                  {generatedImg && (
+                    <button 
+                      onClick={applyAIBanner}
+                      className="px-10 py-5 bg-[#00E5FF] text-black rounded-2xl font-black text-lg hover:scale-105 transition-all shadow-xl"
+                    >
+                      اعتماد التصميم
+                    </button>
+                  )}
+                </div>
+              </div>
+            </MotionDiv>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -7,12 +7,12 @@ type ToastType = 'success' | 'error' | 'info';
 
 interface Toast {
   id: number;
-  message: string;
+  message: string | any;
   type: ToastType;
 }
 
 interface ToastContextType {
-  addToast: (message: string, type: ToastType) => void;
+  addToast: (message: string | any, type: ToastType) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -20,8 +20,9 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = (message: string, type: ToastType) => {
+  const addToast = (message: string | any, type: ToastType) => {
     const id = Date.now();
+    // نضمن أننا نخزن الرسالة بشكل آمن
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       removeToast(id);
@@ -53,7 +54,9 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 {toast.type === 'success' && <CheckCircle2 size={24} />}
                 {toast.type === 'error' && <AlertCircle size={24} />}
                 {toast.type === 'info' && <Info size={24} className="text-[#00E5FF]" />}
-                <p className="font-black text-sm">{toast.message}</p>
+                <p className="font-black text-sm">
+                  {typeof toast.message === 'object' ? JSON.stringify(toast.message) : String(toast.message)}
+                </p>
               </div>
               <button onClick={() => removeToast(toast.id)} className="opacity-40 hover:opacity-100 transition-opacity">
                 <X size={16} />

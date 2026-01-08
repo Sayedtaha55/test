@@ -1,9 +1,10 @@
 
 import { supabase } from './supabase';
 import { Shop, Product, Offer, Reservation, Category } from '../types';
+import { MOCK_SHOPS } from '../constants';
 
 export const ApiService = {
-  // --- التحقق من الهوية ---
+  // --- Auth Section ---
   async login(email: string, pass: string) {
     if (email.toLowerCase() === 'admin' && pass === '1234') {
       const adminUser = {
@@ -14,8 +15,6 @@ export const ApiService = {
         shopId: null
       };
       localStorage.setItem('ray_user', JSON.stringify(adminUser));
-      localStorage.setItem('ray_token', 'root-access-granted');
-      window.dispatchEvent(new Event('auth-change'));
       return { user: adminUser, session: { access_token: 'root-access-granted' } };
     }
 
@@ -41,7 +40,6 @@ export const ApiService = {
     };
 
     localStorage.setItem('ray_user', JSON.stringify(userData));
-    window.dispatchEvent(new Event('auth-change'));
     return { user: userData, session: data.session };
   },
 
@@ -66,6 +64,7 @@ export const ApiService = {
             city: data.city,
             status: 'pending',
             logo_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.shopName)}&background=00E5FF`,
+            page_design: { primaryColor: '#00E5FF', layout: 'modern', bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200' }
           })
           .select().single();
 
@@ -83,7 +82,60 @@ export const ApiService = {
     return { user: authData.user, session: authData.session };
   },
 
-  // --- الإشعارات الحية (Realtime) ---
+  // --- Chat System Section ---
+  async sendMessage(msg: { shopId: string, senderId: string, senderName: string, text: string, role: 'customer' | 'merchant' }) {
+    const { error } = await supabase.from('messages').insert({
+      shop_id: msg.shopId,
+      sender_id: msg.senderId,
+      sender_name: msg.senderName,
+      content: msg.text,
+      role: msg.role,
+      created_at: new Date().toISOString()
+    });
+    if (error) throw error;
+    return true;
+  },
+
+  async getMessages(shopId: string, userId: string) {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('shop_id', shopId)
+      .or(`sender_id.eq.${userId},role.eq.merchant`)
+      .order('created_at', { ascending: true });
+    return data || [];
+  },
+
+  async getMerchantChats(shopId: string) {
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('shop_id', shopId)
+      .order('created_at', { ascending: false });
+    
+    const chatsMap = new Map();
+    (data || []).forEach(m => {
+      if (m.role === 'customer' && !chatsMap.has(m.sender_id)) {
+        chatsMap.set(m.sender_id, {
+          userId: m.sender_id,
+          userName: m.sender_name,
+          lastMessage: m.content,
+          time: m.created_at
+        });
+      }
+    });
+    return Array.from(chatsMap.values());
+  },
+
+  subscribeToMessages(shopId: string, callback: (payload: any) => void) {
+    return supabase
+      .channel(`chat-${shopId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `shop_id=eq.${shopId}` }, 
+      (payload) => callback(payload.new))
+      .subscribe();
+  },
+
+  // --- Real-time Notifications ---
   subscribeToNotifications(shopId: string, callback: (payload: any) => void) {
     return supabase
       .channel(`notifs-${shopId}`)
@@ -105,97 +157,219 @@ export const ApiService = {
   },
 
   async markNotificationsRead(shopId: string) {
-    await supabase
+    const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
       .eq('shop_id', shopId);
+    if (error) throw error;
     return true;
   },
 
-  async addNotification(notif: any) {
-    const { data, error } = await supabase.from('notifications').insert({
-      shop_id: notif.shopId,
-      title: notif.title,
-      message: notif.message,
-      type: notif.type,
-      is_read: false,
-      created_at: new Date().toISOString()
-    }).select().single();
-
-    if (!error) {
-       window.dispatchEvent(new CustomEvent('new-notification', { detail: data }));
+  // --- Shops & Design Persistence ---
+  async getShops(filterStatus: string = 'approved') {
+    try {
+      let query = supabase.from('shops').select('*');
+      if (filterStatus) query = query.eq('status', filterStatus);
+      const { data, error } = await query;
+      
+      if (error || !data || data.length === 0) {
+        return MOCK_SHOPS.map(s => ({
+          ...s, 
+          logo_url: s.logoUrl, 
+          status: 'approved',
+          pageDesign: s.pageDesign || { primaryColor: '#00E5FF', layout: 'modern', bannerUrl: '', headerType: 'centered' }
+        }));
+      }
+      return data.map(d => ({...d, pageDesign: d.page_design || d.pageDesign}));
+    } catch {
+      return MOCK_SHOPS.map(s => ({...s, logo_url: s.logoUrl, status: 'approved'}));
     }
+  },
+
+  async updateShopDesign(id: string, designConfig: any) {
+    const { error } = await supabase
+      .from('shops')
+      .update({ page_design: designConfig })
+      .eq('id', id);
+    if (error) throw error;
     return true;
   },
 
-  // --- الخدمات العامة ---
-  async getShops() {
-    const { data } = await supabase.from('shops').select('*').eq('status', 'approved');
+  async getPendingShops() {
+    return this.getShops('pending');
+  },
+
+  async getAllUsers() {
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) throw error;
     return data || [];
   },
 
-  async getOffers() {
-    const { data } = await supabase.from('offers').select('*').order('created_at', { ascending: false });
-    return data || [];
+  async deleteUser(id: string) {
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) throw error;
+    return true;
   },
 
-  async getProducts(shopId?: string) {
-    let query = supabase.from('products').select('*');
-    if (shopId) query = query.eq('shop_id', shopId);
-    const { data } = await query;
-    return data || [];
+  async updateUserRole(id: string, role: string) {
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+    if (error) throw error;
+    return true;
   },
 
-  async uploadImage(file: File): Promise<string> {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage.from('images').upload(fileName, file);
-    if (uploadError) throw uploadError;
-    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);
-    return publicUrl;
-  },
-
-  async placeOrder(order: any) {
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: orderData, error } = await supabase.from('orders').insert({ 
-      user_id: user?.id, 
-      total: order.total,
-      items: order.items,
-      status: 'pending',
-      created_at: new Date().toISOString() 
-    }).select().single();
+  async getShopBySlug(slug: string) {
+    if (!slug) return null;
+    const cleanSlug = slug.toLowerCase().trim();
     
-    if (!error && order.items.length > 0) {
-      await this.addNotification({
-        shopId: order.items[0].shopId,
-        title: 'طلب شراء جديد! 💳',
-        message: `وصلك طلب بقيمة ج.م ${order.total}`,
-        type: 'sale'
-      });
+    try {
+      const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .or(`slug.ilike.${cleanSlug},id.eq.${cleanSlug}`)
+        .single();
+      
+      if (error || !data) {
+        const mock = MOCK_SHOPS.find(s => s.slug.toLowerCase() === cleanSlug || s.id.toLowerCase() === cleanSlug);
+        return mock ? {
+          ...mock, 
+          logo_url: mock.logoUrl,
+          pageDesign: mock.pageDesign || { primaryColor: '#00E5FF', layout: 'modern', bannerUrl: '', headerType: 'centered' }
+        } : null;
+      }
+      return {...data, pageDesign: data.page_design || data.pageDesign};
+    } catch {
+      const mock = MOCK_SHOPS.find(s => s.slug.toLowerCase() === cleanSlug || s.id.toLowerCase() === cleanSlug);
+      return mock ? {...mock, logo_url: mock.logoUrl} : null;
     }
+  },
 
+  async updateShopStatus(id: string, status: string) {
+    const { error } = await supabase
+      .from('shops')
+      .update({ status })
+      .eq('id', id);
     if (error) throw error;
     return true;
   },
 
   async followShop(shopId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Must be logged in to follow');
-    await supabase.from('follows').insert({ user_id: user.id, shop_id: shopId });
+    const { data: shop } = await supabase
+      .from('shops')
+      .select('followers')
+      .eq('id', shopId)
+      .single();
     
-    await this.addNotification({
-      shopId: shopId,
-      title: 'متابع جديد! ✨',
-      message: 'أحدهم بدأ بمتابعة محلك الآن',
-      type: 'follow'
-    });
-
+    const { error } = await supabase
+      .from('shops')
+      .update({ followers: (shop?.followers || 0) + 1 })
+      .eq('id', shopId);
+    
+    if (error) throw error;
     return true;
   },
 
-  async updateProductStock(id: string, stock: number) {
-    await supabase.from('products').update({ stock }).eq('id', id);
+  async incrementVisitors(shopId: string) {
+    const { data: shop } = await supabase
+      .from('shops')
+      .select('visitors')
+      .eq('id', shopId)
+      .single();
+    
+    if (shop) {
+      await supabase
+        .from('shops')
+        .update({ visitors: (shop.visitors || 0) + 1 })
+        .eq('id', shopId);
+    }
+  },
+
+  // --- Offers Section ---
+  async getOffers() {
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select('*, shops!inner(name, logo_url, category)')
+        .order('created_at', { ascending: false });
+      
+      if (error || !data || data.length === 0) return [];
+
+      return data.map(o => ({
+        id: o.id,
+        shopId: o.shop_id,
+        productId: o.product_id,
+        title: o.title,
+        description: o.description,
+        discount: o.discount,
+        oldPrice: o.old_price,
+        newPrice: o.new_price,
+        imageUrl: o.image_url,
+        expiresIn: o.expires_at,
+        shopName: o.shops?.name,
+        shopLogo: o.shops?.logo_url,
+        category: o.shops?.category
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  async createOffer(offerData: any) {
+    const { error } = await supabase.from('offers').insert({
+      product_id: offerData.productId,
+      shop_id: offerData.shopId,
+      title: offerData.title,
+      description: offerData.description,
+      discount: offerData.discount,
+      old_price: offerData.oldPrice,
+      new_price: offerData.newPrice,
+      image_url: offerData.imageUrl,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    });
+    if (error) throw error;
     return true;
+  },
+
+  async deleteOffer(offerId: string) {
+    const { error } = await supabase.from('offers').delete().eq('id', offerId);
+    if (error) throw error;
+    return true;
+  },
+
+  async getOfferByProductId(productId: string) {
+    const { data } = await supabase
+      .from('offers')
+      .select('*')
+      .eq('product_id', productId)
+      .single();
+    if (!data) return null;
+    return {
+      ...data,
+      shopId: data.shop_id,
+      productId: data.product_id,
+      oldPrice: data.old_price,
+      newPrice: data.new_price,
+      imageUrl: data.image_url
+    };
+  },
+
+  async getProducts(shopId?: string) {
+    try {
+      let query = supabase.from('products').select('*');
+      if (shopId) query = query.eq('shop_id', shopId);
+      const { data, error } = await query;
+      return data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getProductById(id: string) {
+    const { data } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+    return data;
   },
 
   async addProduct(product: any) {
@@ -204,43 +378,54 @@ export const ApiService = {
       name: product.name,
       price: product.price,
       stock: product.stock,
-      image_url: product.imageUrl
+      image_url: product.imageUrl,
+      category: product.category || 'عام'
     });
     if (error) throw error;
     return true;
   },
 
-  async addSale(sale: any) {
-    const { data, error } = await supabase.from('orders').insert({
-      shop_id: sale.shopId,
-      total: sale.total,
-      items: sale.items,
-      type: sale.type,
-      status: 'completed',
-      created_at: new Date(sale.createdAt).toISOString()
-    }).select().single();
-    
-    if (!error) {
-      await this.addNotification({
-        shopId: sale.shopId,
-        title: 'عملية بيع كاشير 💰',
-        message: `تم تسجيل بيع بقيمة ج.م ${sale.total.toFixed(0)}`,
-        type: 'sale'
-      });
-    }
-
+  async updateProductStock(id: string, stock: number) {
+    const { error } = await supabase
+      .from('products')
+      .update({ stock })
+      .eq('id', id);
     if (error) throw error;
     return true;
   },
 
-  async getReservations() {
-    const { data } = await supabase.from('reservations').select('*').order('created_at', { ascending: false });
+  async deleteProduct(id: string) {
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
+  // --- Orders & Reservations ---
+  async placeOrder(order: any) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from('orders').insert({ 
+      user_id: user?.id, 
+      shop_id: order.items[0]?.shopId,
+      total: order.total,
+      items: order.items,
+      status: 'pending',
+      created_at: new Date().toISOString() 
+    });
+    
+    if (error) throw error;
+    return true;
+  },
+
+  async getAllOrders() {
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
     return data || [];
   },
 
-  async addReservation(res: Reservation) {
+  async addReservation(res: any) {
     const { error } = await supabase.from('reservations').insert({
-      id: res.id,
       item_id: res.itemId,
       item_name: res.itemName,
       item_image: res.itemImage,
@@ -249,93 +434,95 @@ export const ApiService = {
       shop_name: res.shopName,
       customer_name: res.customerName,
       customer_phone: res.customerPhone,
-      status: res.status,
-      created_at: new Date(res.createdAt).toISOString()
+      status: 'pending',
+      created_at: new Date().toISOString()
     });
-
-    if (!error) {
-      await this.addNotification({
-        shopId: res.shopId,
-        title: 'حجز جديد! 📅',
-        message: `${res.customerName} حجز ${res.itemName}`,
-        type: 'reservation'
-      });
-    }
-
     if (error) throw error;
     return true;
   },
 
-  async getProductById(id: string) {
-    const { data } = await supabase.from('products').select('*').eq('id', id).single();
-    return data;
-  },
-
-  async getOfferByProductId(productId: string) {
-    const { data } = await supabase.from('offers').select('*').eq('id', productId).single();
-    return data;
-  },
-
-  async getPendingShops() {
-    const { data } = await supabase.from('shops').select('*').eq('status', 'pending');
+  async getReservations() {
+    const { data } = await supabase
+      .from('reservations')
+      .select('*')
+      .order('created_at', { ascending: false });
     return data || [];
   },
 
-  async updateShopStatus(shopId: string, status: 'approved' | 'rejected') {
-    const { error } = await supabase.from('shops').update({ status }).eq('id', shopId);
+  async updateReservationStatus(id: string, status: string) {
+    const { error } = await supabase
+      .from('reservations')
+      .update({ status })
+      .eq('id', id);
     if (error) throw error;
     return true;
   },
 
-  async getAllUsers() {
-    const { data } = await supabase.from('profiles').select('*');
-    return data || [];
-  },
-
-  async deleteUser(userId: string) {
-    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+  async addSale(sale: any) {
+    const { error } = await supabase.from('orders').insert({
+      shop_id: sale.shopId || 's1',
+      total: sale.total,
+      items: sale.items,
+      status: 'completed',
+      created_at: new Date(sale.createdAt).toISOString()
+    });
     if (error) throw error;
     return true;
   },
 
-  async updateUserRole(userId: string, role: string) {
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
-    if (error) throw error;
-    return true;
-  },
-
-  async getAllOrders() {
-    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-    return data || [];
-  },
-
+  // --- Feedback ---
   async saveFeedback(feedback: any) {
     const { error } = await supabase.from('feedback').insert({
       content: feedback.text,
-      user_name: feedback.userName || 'Guest',
-      user_email: feedback.userEmail || 'guest@test.com',
+      user_name: feedback.userName,
+      user_email: feedback.userEmail,
       created_at: new Date().toISOString()
     });
+    if (error) throw error;
     return true;
   },
 
   async getFeedback() {
-    const { data } = await supabase.from('feedback').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('feedback')
+      .select('*')
+      .order('created_at', { ascending: false });
     return data || [];
   },
 
-  async getSystemAnalytics() {
-    const { count: shopsCount } = await supabase.from('shops').select('*', { count: 'exact', head: true });
-    const { count: usersCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-    const { count: ordersCount } = await supabase.from('orders').select('*', { count: 'exact', head: true });
-    const { data: sales } = await supabase.from('orders').select('total');
-    const totalRevenue = sales?.reduce((acc, s) => acc + (s.total || 0), 0) || 0;
-
+  // --- Analytics ---
+  async getShopAnalytics(shopId: string) {
+    const { data: orders } = await supabase.from('orders').select('total, created_at').eq('shop_id', shopId);
+    const today = new Date().toISOString().split('T')[0];
+    const todayOrders = orders?.filter(o => o.created_at.startsWith(today)) || [];
+    
     return {
-      totalShops: shopsCount || 0,
-      totalUsers: usersCount || 0,
-      totalOrders: ordersCount || 0,
-      totalRevenue: totalRevenue.toLocaleString(),
+      revenueToday: todayOrders.reduce((sum, o) => sum + o.total, 0),
+      totalRevenue: orders?.reduce((sum, o) => sum + o.total, 0) || 0,
+      salesCountToday: todayOrders.length,
+      totalOrders: orders?.length || 0,
+      chartData: [
+        { name: 'السبت', sales: 400 },
+        { name: 'الأحد', sales: 300 },
+        { name: 'الاثنين', sales: 600 },
+        { name: 'الثلاثاء', sales: 800 },
+        { name: 'الأربعاء', sales: 500 },
+        { name: 'الخميس', sales: 900 },
+        { name: 'الجمعة', sales: 1200 },
+      ]
+    };
+  },
+
+  async getSystemAnalytics() {
+    const { data: shops } = await supabase.from('shops').select('id');
+    const { data: users } = await supabase.from('profiles').select('id');
+    const { data: orders } = await supabase.from('orders').select('total');
+    
+    return {
+      totalRevenue: orders?.reduce((sum, o) => sum + o.total, 0) || 0,
+      totalUsers: users?.length || 0,
+      totalShops: shops?.length || 0,
+      totalOrders: orders?.length || 0
     };
   }
 };

@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Sparkles, X, Send, ExternalLink, Loader2, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RayDB } from '../constants';
+import { ApiService } from '../services/api.service';
 
 const MotionDiv = motion.div as any;
 
@@ -24,20 +25,27 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
     setQuery('');
     setLoading(true);
 
-    const shops = await RayDB.getShops();
-    const offers = await RayDB.getOffers();
-    const currentShops = shops.map(s => `${s.name} في ${s.city}`).join(', ');
-    const currentOffers = offers.map(o => `${o.title} بخصم ${o.discount}%`).join(', ');
-
     try {
+      // جلب البيانات الحالية من النظام لتزويد Gemini بها
+      const [shops, offers] = await Promise.all([
+        ApiService.getShops('approved'),
+        ApiService.getOffers()
+      ]);
+
+      const currentContext = {
+        shops: shops.map((s: any) => s.name).join(', '),
+        offers: offers.map((o: any) => `${o.title} بخصم ${o.discount}%`).join(', ')
+      };
+
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `أنت مساعد ذكي لمنصة "تست" للعروض في مصر. 
-        المحلات المتاحة حالياً: ${currentShops}.
-        العروض الحالية: ${currentOffers}.
+        contents: `أنت مساعد ذكي لمنصة "تست" في مصر.
+        السياق الحالي للمنصة:
+        المحلات: ${currentContext.shops}.
+        العروض المتوفرة لدينا: ${currentContext.offers}.
         طلب المستخدم: ${userMsg}.
-        رد باللهجة المصرية، كن ودوداً ومختصراً جداً. إذا كان العرض متاحاً في "تست" اذكره بوضوح، وإذا لم يكن ابحث عنه في جوجل.`,
+        رد بلهجة مصرية "مودرن" وودودة. ابحث في جوجل عن محلات حقيقية في مصر إذا كان طلب المستخدم غير متوفر لدينا.`,
         config: {
           tools: [{ googleSearch: {} }],
         },
@@ -46,13 +54,12 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
       const text = response.text || "للأسف مقدرتش ألاقي تفاصيل دلوقت، جرب تسألني عن محل محدد.";
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       
-      // Extract unique and valid links from grounding metadata
       const linksMap = new Map();
       chunks.forEach((chunk: any) => {
         if (chunk.web && chunk.web.uri) {
           linksMap.set(chunk.web.uri, {
             uri: chunk.web.uri,
-            title: chunk.web.title || 'المصدر'
+            title: chunk.web.title || 'مصدر خارجي'
           });
         }
       });
@@ -65,7 +72,7 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
       }]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'ai', content: "حصلت مشكلة بسيطة، جرب تسألني تاني." }]);
+      setMessages(prev => [...prev, { role: 'ai', content: "حصلت مشكلة بسيطة في الشبكة، جرب تسألني تاني يا بطل." }]);
     } finally {
       setLoading(false);
     }
@@ -98,7 +105,7 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
                   <Sparkles className="w-8 h-8 text-[#00E5FF]" />
                 </div>
                 <p className="font-black text-lg text-slate-400">أي عرض بتدور عليه في مصر؟</p>
-                <p className="text-xs mt-2 max-w-[220px]">اسألني عن أحسن سعر للموبايلات، أو أرخص وجبة غداء في منطقتك.</p>
+                <p className="text-xs mt-2 max-w-[220px]">اسألني عن أرخص موبايل، أو أحسن مطعم بيتزا قريب منك.</p>
               </div>
             )}
             {messages.map((msg, i) => (
@@ -108,13 +115,13 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}
               >
-                <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-[#00E5FF] text-slate-900 font-bold' : 'bg-slate-50 text-slate-700'}`}>
-                  <p className="text-sm leading-relaxed">{msg.content}</p>
+                <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-[#00E5FF] text-slate-900 font-bold' : 'bg-slate-100 text-slate-700'}`}>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   
                   {msg.links && msg.links.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-slate-200/50 space-y-3">
+                    <div className="mt-4 pt-3 border-t border-slate-200 space-y-2">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <Globe size={12} className="text-[#00E5FF]" /> مصادر العروض الخارجية:
+                        <Globe size={12} className="text-[#00E5FF]" /> مصادر خارجية:
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {msg.links.map((link, idx) => (
@@ -123,10 +130,10 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
                             href={link.uri} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-[#00E5FF] hover:border-[#00E5FF] hover:shadow-md transition-all"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-[#00E5FF] hover:border-[#00E5FF] transition-all"
                           >
                             <ExternalLink size={10} />
-                            {link.title.length > 25 ? link.title.substring(0, 25) + '...' : link.title}
+                            {link.title}
                           </a>
                         ))}
                       </div>
@@ -149,7 +156,7 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
             <div className="relative">
               <input 
                 type="text" 
-                placeholder="اسأل تست..." 
+                placeholder="اسأل تست عن أي حاجة..." 
                 className="w-full bg-slate-50 rounded-full py-4 pr-6 pl-14 outline-none border-2 border-transparent focus:border-[#00E5FF] transition-all font-bold text-sm text-right"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

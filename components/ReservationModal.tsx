@@ -25,10 +25,16 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
 
   useEffect(() => {
     if (isOpen) {
-      const user = localStorage.getItem('ray_user');
-      if (user) {
-        const parsed = JSON.parse(user);
-        setName(parsed.name || '');
+      // جلب بيانات المستخدم المسجل لتسهيل عملية الحجز
+      const userStr = localStorage.getItem('ray_user');
+      if (userStr) {
+        try {
+          const parsed = JSON.parse(userStr);
+          setName(parsed.name || '');
+          setPhone(parsed.phone || ''); 
+        } catch (e) {
+          console.error("Error parsing user data for reservation", e);
+        }
       }
       setStep('form');
     }
@@ -40,12 +46,12 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
 
     const newReservation: Reservation = {
       id: Math.random().toString(36).substr(2, 9),
-      itemId: item.id,
-      itemName: item.name,
-      itemImage: item.image,
-      itemPrice: item.price,
-      shopId: item.shopId,
-      shopName: item.shopName,
+      itemId: String(item.id),
+      itemName: String(item.name),
+      itemImage: String(item.image),
+      itemPrice: Number(item.price),
+      shopId: String(item.shopId),
+      shopName: String(item.shopName),
       customerName: name,
       customerPhone: phone,
       status: 'pending',
@@ -89,11 +95,11 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
                 </div>
 
                 <div className="bg-slate-50 p-6 rounded-3xl mb-8 flex items-center gap-4 flex-row-reverse">
-                   <img src={item?.image} className="w-20 h-20 rounded-2xl object-cover shadow-sm" />
+                   <img src={String(item?.image || '')} className="w-20 h-20 rounded-2xl object-cover shadow-sm" />
                    <div className="flex-1">
-                      <p className="font-black text-lg">{item?.name}</p>
-                      <p className="text-[#00E5FF] font-black">ج.م {item?.price}</p>
-                      <p className="text-[10px] text-slate-400 font-bold mt-1">متجر: {item?.shopName}</p>
+                      <p className="font-black text-lg">{String(item?.name || 'صنف')}</p>
+                      <p className="text-[#00E5FF] font-black">ج.م {Number(item?.price || 0)}</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">متجر: {String(item?.shopName || '')}</p>
                    </div>
                 </div>
 

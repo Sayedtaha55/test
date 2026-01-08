@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { ApiService } from '../services/api.service';
-import { Offer } from '../types';
-import { Sparkles, TrendingUp, ShoppingCart, CalendarCheck, Loader2, MessageSquarePlus, Send, X, AlertCircle, Eye } from 'lucide-react';
+import { Offer, Shop } from '../types';
+import { Sparkles, TrendingUp, ShoppingCart, CalendarCheck, Loader2, MessageSquarePlus, Send, X, AlertCircle, Eye, Wand2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as ReactRouterDOM from 'react-router-dom';
 import ReservationModal from './ReservationModal';
@@ -11,8 +11,60 @@ import { GoogleGenAI } from "@google/genai";
 const { Link, useNavigate } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
 
+const AIDiscoveryBar: React.FC = () => {
+  const [insight, setInsight] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const generateVibe = async () => {
+    setLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: 'أنا في تطبيق "تست" للتسوق في مصر. اقترح عليا "فيب" أو "مود" عشوائي للتسوق النهاردة بلهجة مصرية روشة وقصيرة جداً، مثلاً (مود الروقان، مود الشياكة، مود الأكيل)، وقول نصيحة سريعة.',
+      });
+      setInsight(response.text || 'مودك النهاردة عالي، انزل دلع نفسك بأحلى عروض!');
+    } catch {
+      setInsight('مود الروقان هو اللي كسبان، شوف أحلى عروض المحلات دلوقتي!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { generateVibe(); }, []);
+
+  return (
+    <MotionDiv 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-4xl mx-auto mb-16 p-1 bg-gradient-to-r from-[#00E5FF] via-[#BD00FF] to-[#00E5FF] rounded-[2rem] shadow-2xl"
+    >
+      <div className="bg-white/95 backdrop-blur-md rounded-[1.9rem] p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
+        <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
+          {loading ? <Loader2 className="text-[#00E5FF] animate-spin" /> : <Wand2 className="text-[#00E5FF]" />}
+        </div>
+        <div className="flex-1 text-right">
+          <h4 className="font-black text-xs md:text-sm text-[#BD00FF] uppercase tracking-widest mb-2 flex items-center gap-2 justify-end">
+            اكتشاف ذكي <Sparkles size={14} />
+          </h4>
+          <p className="text-slate-900 font-bold text-sm md:text-lg leading-relaxed">
+            {loading ? 'جاري قراءة الودع الرقمي...' : insight}
+          </p>
+        </div>
+        <button 
+          onClick={generateVibe}
+          className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-xs hover:scale-105 transition-all shadow-xl whitespace-nowrap"
+        >
+          تغيير المود
+        </button>
+      </div>
+    </MotionDiv>
+  );
+};
+
 const HomeFeed: React.FC = () => {
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const navigate = useNavigate();
@@ -26,10 +78,14 @@ const HomeFeed: React.FC = () => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const data = await ApiService.getOffers();
-        setOffers(data);
+        const [offersData, shopsData] = await Promise.all([
+          ApiService.getOffers(),
+          ApiService.getShops('approved')
+        ]);
+        setOffers(offersData);
+        setShops(shopsData);
       } catch (e) {
-        console.error("Failed to fetch offers", e);
+        console.error("Failed to fetch data", e);
       } finally {
         setLoading(false);
       }
@@ -46,7 +102,6 @@ const HomeFeed: React.FC = () => {
       const userStr = localStorage.getItem('ray_user');
       const user = userStr ? JSON.parse(userStr) : null;
 
-      // حفظ التعليق في قاعدة البيانات للآدمن
       await ApiService.saveFeedback({
         text: feedbackText,
         userName: user?.name,
@@ -57,9 +112,7 @@ const HomeFeed: React.FC = () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `المستخدم بعت اقتراح أو شكوى عن تطبيق "تست" في مصر: "${feedbackText}". 
-        رد عليه بذكاء ومودة، قوله إننا فعلاً لسه في مرحلة التجربة وبنقدر جداً رأيه. 
-        لو بيقترح ميزة، قوله إننا هنفكر فيها. لو بيشتكي من حاجة، قوله إننا هنصلحها. 
-        رد بلهجة مصرية روشة وقصيرة جداً.`,
+        رد عليه بذكاء ومودة بلهجة مصرية روشة وقصيرة جداً.`,
       });
       setFeedbackResponse(response.text || 'شكراً ليك يا بطل، رأيك وصل وهنظبط الدنيا!');
     } catch (e) {
@@ -94,10 +147,12 @@ const HomeFeed: React.FC = () => {
             حصريات تست الذكية
          </MotionDiv>
          <h1 className="text-4xl md:text-8xl font-black tracking-tighter mb-8 leading-[0.85]">انفجار الصفقات..<br/><span className="text-[#00E5FF]">تحت شعاع تست.</span></h1>
-         <p className="text-slate-400 text-lg md:text-2xl font-bold max-w-2xl px-4 leading-relaxed">
-            ماتضيعش وقت في التدوير. تست جمعتلك أقوى خصومات المحلات والمطاعم في مصر في مكان واحد بذكاء اصطناعي وتوفير حقيقي ملوش زي.
+         <p className="text-slate-400 text-lg md:text-2xl font-bold max-w-2xl px-4 leading-relaxed mb-12">
+            ماتضيعش وقت في التدوير. تست جمعتلك أقوى خصومات المحلات والمطاعم في مصر في مكان واحد.
          </p>
       </div>
+
+      <AIDiscoveryBar />
 
       <section className="mb-12 md:mb-24">
         {offers.length > 0 && (
@@ -151,7 +206,9 @@ const HomeFeed: React.FC = () => {
            </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
-          {offers.slice(1).map((offer) => (
+          {offers.length === 0 ? (
+            <div className="col-span-full py-20 text-center text-slate-300 font-bold">لا توجد عروض نشطة حالياً.</div>
+          ) : offers.slice(1).map((offer) => (
             <MotionDiv 
               key={offer.id}
               className="group bg-white p-5 rounded-[3rem] border border-slate-50 hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.08)] transition-all duration-500"

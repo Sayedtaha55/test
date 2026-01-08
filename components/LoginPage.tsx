@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, ShieldCheck, Loader2, AlertCircle, KeyRound, X, Sparkles } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, Loader2, AlertCircle, KeyRound, X, Sparkles, UserPlus, Store } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { ApiService } from '../services/api.service';
 import { useToast } from './Toaster';
@@ -53,7 +53,6 @@ const LoginPage: React.FC = () => {
         className="w-full max-w-xl bg-white border border-slate-100 p-8 md:p-16 rounded-[3.5rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.05)] text-right"
       >
         <div className="flex flex-col items-center text-center mb-12">
-           {/* المدخل السري للآدمن عند الضغط على الشعار */}
            <div 
               onClick={() => navigate('/admin/gate')}
               className="w-20 h-20 bg-[#1A1A1A] rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl relative group overflow-hidden cursor-pointer"
@@ -62,7 +61,7 @@ const LoginPage: React.FC = () => {
               <span className="text-white font-black text-4xl relative z-10">R</span>
            </div>
            <h1 className="text-4xl font-black tracking-tighter mb-4">أهلاً بك <span className="text-[#00E5FF]">مجدداً.</span></h1>
-           <p className="text-slate-400 font-bold">استخدم بياناتك المشفرة للوصول لحسابك.</p>
+           <p className="text-slate-400 font-bold text-sm">سجل دخولك أو افتح حساب نشاط تجاري جديد.</p>
         </div>
 
         <AnimatePresence>
@@ -101,6 +100,20 @@ const LoginPage: React.FC = () => {
             {loading ? 'جاري التحقق...' : 'دخول آمن'}
           </button>
         </form>
+
+        <div className="mt-12 pt-8 border-t border-slate-50 space-y-4">
+           <p className="text-center text-slate-400 font-bold text-xs mb-4">ليس لديك حساب؟</p>
+           <div className="grid grid-cols-2 gap-4">
+              <Link to="/signup" className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all">
+                 <UserPlus size={20} className="text-slate-900" />
+                 <span className="font-black text-[10px]">تسجيل زبون</span>
+              </Link>
+              <Link to="/signup?role=merchant" className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all">
+                 <Store size={20} className="text-[#BD00FF]" />
+                 <span className="font-black text-[10px]">تسجيل نشاط</span>
+              </Link>
+           </div>
+        </div>
       </MotionDiv>
     </div>
   );

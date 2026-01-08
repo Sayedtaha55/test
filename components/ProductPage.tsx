@@ -6,11 +6,10 @@ import { Product, Offer, Shop } from '../types';
 import { motion } from 'framer-motion';
 import { 
   ShoppingCart, CalendarCheck, ArrowRight, Heart, 
-  Share2, ShieldCheck, Truck, Package, Store 
+  Share2, ShieldCheck, Truck, Package, Store, Loader2, AlertCircle, Home
 } from 'lucide-react';
 import ReservationModal from './ReservationModal';
 
-// Fix: Change 'navigate' to 'useNavigate' in destructuring
 const { useParams, useNavigate, Link } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
 
@@ -22,36 +21,45 @@ const ProductPage: React.FC = () => {
   const [shop, setShop] = useState<Shop | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isResModalOpen, setIsResModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    // Fix: Await asynchronous RayDB calls
     const loadData = async () => {
-      const p = await RayDB.getProductById(id);
-      if (!p) {
-        // إذا لم يكن منتجاً عادياً، قد يكون ID الخاص بالعرض نفسه
-        const offers = await RayDB.getOffers();
-        const o = offers.find(off => off.id === id);
-        if (o) {
-          const products = await RayDB.getProducts();
-          const originalProduct = products.find(prod => prod.name === o.title);
-          if (originalProduct) setProduct(originalProduct);
-          setOffer(o);
-          const shops = await RayDB.getShops();
-          setShop(shops.find(s => s.id === o.shopId) || null);
+      setLoading(true);
+      setError(false);
+      try {
+        const p = await RayDB.getProductById(id);
+        if (!p) {
+          const offers = await RayDB.getOffers();
+          const o = offers.find(off => off.id === id);
+          if (o) {
+            const products = await RayDB.getProducts();
+            const originalProduct = products.find(prod => prod.name === o.title);
+            if (originalProduct) setProduct(originalProduct);
+            setOffer(o);
+            const shops = await RayDB.getShops();
+            setShop(shops.find(s => s.id === o.shopId) || null);
+          } else {
+            setError(true);
+          }
         } else {
-          navigate('/');
+          setProduct(p);
+          const o = await RayDB.getOfferByProductId(p.id);
+          if (o) setOffer(o);
+          
+          const shops = await RayDB.getShops();
+          setShop(shops.find(s => s.id === (p as any).shop_id) || shops[0]);
+          
+          const favs = RayDB.getFavorites();
+          setIsFavorite(favs.includes(p.id));
         }
-        return;
+      } catch (err) {
+        console.error("Error loading product:", err);
+        setError(true);
+      } finally {
+        setLoading(false);
       }
-      setProduct(p);
-      const o = await RayDB.getOfferByProductId(p.id);
-      if (o) setOffer(o);
-      
-      const shops = await RayDB.getShops();
-      setShop(shops.find(s => s.id === 's1') || shops[0]); // تجريبياً نربطه بأول محل
-      
-      const favs = RayDB.getFavorites();
-      setIsFavorite(favs.includes(p.id));
     };
     loadData();
     window.scrollTo(0, 0);
@@ -77,7 +85,30 @@ const ProductPage: React.FC = () => {
     window.dispatchEvent(event);
   };
 
-  if (!product) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
+        <Loader2 className="w-12 h-12 text-[#00E5FF] animate-spin mb-4" />
+        <h2 className="text-xl font-black">جاري جلب المنتج...</h2>
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center" dir="rtl">
+        <AlertCircle className="w-16 h-16 text-slate-300 mb-6" />
+        <h2 className="text-2xl font-black mb-4">عفواً، المنتج غير متاح</h2>
+        <p className="text-slate-500 font-bold mb-8">ربما تم حذفه أو أن الرابط غير صحيح.</p>
+        <button 
+          onClick={() => navigate('/')}
+          className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black flex items-center gap-2"
+        >
+          <Home size={18} /> العودة للرئيسية
+        </button>
+      </div>
+    );
+  }
 
   const currentPrice = offer ? offer.newPrice : product.price;
   const hasDiscount = !!offer;
@@ -99,7 +130,7 @@ const ProductPage: React.FC = () => {
           animate={{ opacity: 1, x: 0 }}
           className="relative aspect-square rounded-[4rem] overflow-hidden bg-slate-50 border border-slate-100 shadow-2xl"
         >
-          <img src={product.imageUrl} className="w-full h-full object-cover" alt={product.name} />
+          <img src={product.imageUrl || (product as any).image_url} className="w-full h-full object-cover" alt={product.name} />
           {hasDiscount && (
             <div className="absolute top-10 left-10 bg-[#BD00FF] text-white px-8 py-3 rounded-2xl font-black text-xl shadow-2xl">
               -{offer?.discount}%
@@ -122,7 +153,7 @@ const ProductPage: React.FC = () => {
           <div className="space-y-4">
              {shop && (
                <Link to={`/shop/${shop.slug}`} className="inline-flex items-center gap-3 bg-slate-50 px-6 py-2 rounded-full border border-slate-100 group">
-                  <img src={shop.logoUrl} className="w-6 h-6 rounded-full object-cover" />
+                  <img src={shop.logoUrl || (shop as any).logo_url} className="w-6 h-6 rounded-full object-cover" />
                   <span className="text-sm font-black text-slate-900 group-hover:text-[#00E5FF] transition-colors">{shop.name}</span>
                </Link>
              )}
@@ -187,7 +218,7 @@ const ProductPage: React.FC = () => {
         item={{
           id: product.id,
           name: product.name,
-          image: product.imageUrl,
+          image: product.imageUrl || (product as any).image_url,
           price: currentPrice,
           shopId: shop?.id || 's1',
           shopName: shop?.name || 'تست'

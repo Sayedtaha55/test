@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Search, User, Sparkles, Bell, Heart, ShoppingCart, Store, UtensilsCrossed, Menu, X, LogOut, Info } from 'lucide-react';
+import { Search, User, Sparkles, Bell, Heart, ShoppingCart, Store, UtensilsCrossed, Menu, X, LogOut, Info, PlusCircle } from 'lucide-react';
 import RayAssistant from './RayAssistant';
 import CartDrawer from './CartDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,6 +25,7 @@ const PublicLayout: React.FC = () => {
     const checkAuth = () => {
       const savedUser = localStorage.getItem('ray_user');
       if (savedUser) setUser(JSON.parse(savedUser));
+      else setUser(null);
     };
     checkAuth();
     const handleAddToCart = (e: any) => {
@@ -40,22 +41,12 @@ const PublicLayout: React.FC = () => {
     };
   }, []);
 
-  const handleFooterLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, to: string) => {
-    // إذا كان الرابط يؤدي إلى نفس الصفحة الحالية، نقوم بالتمرير للأعلى بسلاسة
-    if (location.pathname === to) {
-      e.preventDefault();
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
-  };
-
   const logout = () => {
     localStorage.removeItem('ray_user');
+    localStorage.removeItem('ray_token');
     setUser(null);
-    navigate('/');
     window.dispatchEvent(new Event('auth-change'));
+    navigate('/');
   };
 
   const removeFromCart = (id: string) => {
@@ -98,7 +89,7 @@ const PublicLayout: React.FC = () => {
             <div className="flex items-center gap-2">
                <NavButton to="/shops" icon={<Store className="w-4 h-4" />} label="المحلات" active={location.pathname === '/shops'} />
                <NavButton to="/restaurants" icon={<UtensilsCrossed className="w-4 h-4" />} label="المطاعم" active={location.pathname === '/restaurants'} />
-               <NavButton to="/about" icon={<Info className="w-4 h-4" />} label="من نحن" active={location.pathname === '/about'} />
+               {!user && <NavButton to="/signup?role=merchant" icon={<PlusCircle className="w-4 h-4 text-[#BD00FF]" />} label="سجل نشاطك" active={false} />}
             </div>
 
             <div onClick={() => setAssistantOpen(true)} className="flex-1 group">
@@ -123,11 +114,11 @@ const PublicLayout: React.FC = () => {
             </button>
             <div className="h-6 md:h-8 w-[1px] bg-slate-100 mx-1 md:mx-2 hidden sm:block" />
             {user ? (
-              <Link to="/profile" className="flex items-center gap-2 md:gap-3 bg-slate-900 text-white pl-3 pr-1 py-1 rounded-full hover:bg-black transition-all">
+              <Link to={user.role === 'merchant' ? '/business/dashboard' : '/profile'} className="flex items-center gap-2 md:gap-3 bg-slate-900 text-white pl-3 pr-1 py-1 rounded-full hover:bg-black transition-all">
                 <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-[#00E5FF] text-black font-black flex items-center justify-center text-[10px] md:text-xs">
                   {user.name.charAt(0)}
                 </div>
-                <span className="text-[10px] md:text-xs font-black hidden md:block">{user.name}</span>
+                <span className="text-[10px] md:text-xs font-black hidden md:block">{user.role === 'merchant' ? 'لوحة التحكم' : user.name}</span>
               </Link>
             ) : (
               <Link to="/login" className="bg-[#1A1A1A] text-white px-4 md:px-8 py-2 md:py-3.5 rounded-lg md:rounded-2xl font-black text-[10px] md:text-sm hover:bg-[#00E5FF] hover:text-black transition-all">
@@ -150,8 +141,9 @@ const PublicLayout: React.FC = () => {
               <nav className="flex flex-col gap-6 flex-1">
                 <MobileNavItem to="/shops" onClick={() => setMobileMenuOpen(false)} icon={<Store />} label="المحلات" />
                 <MobileNavItem to="/restaurants" onClick={() => setMobileMenuOpen(false)} icon={<UtensilsCrossed />} label="المطاعم" />
+                {!user && <MobileNavItem to="/signup?role=merchant" onClick={() => setMobileMenuOpen(false)} icon={<PlusCircle className="text-[#BD00FF]" />} label="تسجيل نشاط جديد" />}
                 <MobileNavItem to="/about" onClick={() => setMobileMenuOpen(false)} icon={<Info />} label="من نحن" />
-                <MobileNavItem to="/profile" onClick={() => setMobileMenuOpen(false)} icon={<User />} label="حسابي" />
+                <MobileNavItem to={user?.role === 'merchant' ? '/business/dashboard' : '/profile'} onClick={() => setMobileMenuOpen(false)} icon={<User />} label={user ? 'حسابي' : 'دخول'} />
               </nav>
             </motion.div>
           </>
@@ -178,15 +170,16 @@ const PublicLayout: React.FC = () => {
             <div>
               <h4 className="font-black text-[10px] uppercase tracking-widest text-[#00E5FF] mb-6">استكشف</h4>
               <nav className="flex flex-col gap-4 text-slate-300 font-bold text-sm md:text-lg">
-                <Link to="/about" onClick={(e: any) => handleFooterLinkClick(e, '/about')} className="hover:text-white transition-colors">من نحن</Link>
-                <Link to="/shops" onClick={(e: any) => handleFooterLinkClick(e, '/shops')} className="hover:text-white transition-colors">المحلات</Link>
-                <Link to="/restaurants" onClick={(e: any) => handleFooterLinkClick(e, '/restaurants')} className="hover:text-white transition-colors">المطاعم</Link>
+                <Link to="/about" className="hover:text-white transition-colors">من نحن</Link>
+                <Link to="/shops" className="hover:text-white transition-colors">المحلات</Link>
+                <Link to="/restaurants" className="hover:text-white transition-colors">المطاعم</Link>
               </nav>
             </div>
             <div>
               <h4 className="font-black text-[10px] uppercase tracking-widest text-[#BD00FF] mb-6">للأعمال</h4>
               <nav className="flex flex-col gap-4 text-slate-300 font-bold text-sm md:text-lg">
                 <Link to="/business" className="hover:text-white transition-colors">انضم إلينا</Link>
+                <Link to="/signup?role=merchant" className="hover:text-white transition-colors">تسجيل نشاط جديد</Link>
                 <Link to="/business/dashboard" className="hover:text-white transition-colors">لوحة التحكم</Link>
               </nav>
             </div>
