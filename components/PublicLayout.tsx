@@ -110,7 +110,7 @@ const PublicLayout: React.FC = () => {
             {user ? (
               <Link to={user.role === 'merchant' ? '/business/dashboard' : '/profile'} className="flex items-center gap-2 md:gap-3 bg-slate-900 text-white pl-3 pr-1 py-1 rounded-full hover:bg-black transition-all">
                 <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-[#00E5FF] text-black font-black flex items-center justify-center text-[10px] md:text-xs">
-                  {user.name.charAt(0)}
+                  {user.name?.charAt(0) || 'U'}
                 </div>
                 <span className="text-[10px] md:text-xs font-black hidden md:block">{user.role === 'merchant' ? 'لوحة التحكم' : user.name}</span>
               </Link>

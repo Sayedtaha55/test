@@ -86,7 +86,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
       }
     } catch (error) {
-      console.error("AI Gen Error:", error);
+      // AI Gen Error - handled silently
       addToast('فشل ذكاء تست في توليد الصورة حالياً', 'error');
     } finally {
       setIsGenerating(false);

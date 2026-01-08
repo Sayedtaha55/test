@@ -55,7 +55,7 @@ const ProductPage: React.FC = () => {
           setIsFavorite(favs.includes(p.id));
         }
       } catch (err) {
-        console.error("Error loading product:", err);
+        // Error loading product - handled silently
         setError(true);
       } finally {
         setLoading(false);

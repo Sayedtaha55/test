@@ -3,6 +3,9 @@ import { supabase } from './supabase';
 import { Shop, Product, Offer, Reservation, Category, ShopGallery } from '../types';
 import { MOCK_SHOPS } from '../constants';
 
+let offersTableMissing = false;
+let warnedOffersMissing = false;
+
 export const ApiService = {
   // --- Auth Section ---
   async login(email: string, pass: string) {
@@ -290,30 +293,46 @@ export const ApiService = {
 
   // --- Offers Section ---
   async getOffers() {
+    if (offersTableMissing) return [];
     try {
       const { data, error } = await supabase
         .from('offers')
         .select('*, shops!inner(name, logo_url, category)')
         .order('created_at', { ascending: false });
       
-      if (error || !data || data.length === 0) return [];
-
-      return data.map(o => ({
+      if (error) {
+        const status = (error as any)?.status;
+        const code = (error as any)?.code;
+        if (status === 404 || code === '42P01') {
+          offersTableMissing = true;
+        }
+        if (!warnedOffersMissing) {
+          console.warn('Offers table not found, returning empty array');
+          warnedOffersMissing = true;
+        }
+        return [];
+      }
+      
+      return (data || []).map((o: any) => ({
         id: o.id,
-        shopId: o.shop_id,
-        productId: o.product_id,
+        shopId: o.shop_id ?? o.shopId,
+        productId: o.product_id ?? o.productId,
+        shopName: o.shops?.name || '',
+        shopLogo: o.shops?.logo_url || '',
         title: o.title,
-        description: o.description,
-        discount: o.discount,
-        oldPrice: o.old_price,
-        newPrice: o.new_price,
-        imageUrl: o.image_url,
-        expiresIn: o.expires_at,
-        shopName: o.shops?.name,
-        shopLogo: o.shops?.logo_url,
-        category: o.shops?.category
-      }));
-    } catch {
+        description: o.description || '',
+        discount: o.discount || 0,
+        oldPrice: o.old_price ?? o.oldPrice ?? 0,
+        newPrice: o.new_price ?? o.newPrice ?? 0,
+        imageUrl: o.image_url ?? o.imageUrl ?? '',
+        category: (o.shops?.category || o.category || Category.RETAIL) as Category,
+        expiresIn: o.expires_at ?? o.expiresIn ?? ''
+      })) as Offer[];
+    } catch (err) {
+      if (!warnedOffersMissing) {
+        console.warn('Error fetching offers, returning empty array');
+        warnedOffersMissing = true;
+      }
       return [];
     }
   },

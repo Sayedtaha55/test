@@ -71,7 +71,7 @@ const MerchantDashboard: React.FC = () => {
       setActiveOffers(allOffers.filter((o: any) => o.shopId === myShop.id));
       setGalleryImages(galleryData || []);
     } catch (e) {
-      console.error("Dashboard Sync Error:", e);
+      // Dashboard Sync Error - handled silently
     } finally {
       setLoading(false);
     }

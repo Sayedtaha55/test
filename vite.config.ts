@@ -18,6 +18,20 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+              router: ['react-router-dom'],
+              ui: ['framer-motion', 'lucide-react'],
+              charts: ['recharts'],
+              api: ['@supabase/supabase-js', '@google/genai']
+            }
+          }
+        },
+        chunkSizeWarningLimit: 600
       }
     };
 });

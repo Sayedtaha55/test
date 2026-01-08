@@ -271,7 +271,7 @@ const ShopProfile: React.FC = () => {
           setError(true);
         }
       } catch (err) {
-        console.error("Error fetching shop data:", err);
+        // Error fetching shop data - handled silently
         setError(true);
       } finally {
         setTimeout(() => setLoading(false), 400);

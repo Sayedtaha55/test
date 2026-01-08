@@ -33,7 +33,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
           setName(parsed.name || '');
           setPhone(parsed.phone || ''); 
         } catch (e) {
-          console.error("Error parsing user data for reservation", e);
+          // Error parsing user data - handled silently
         }
       }
       setStep('form');

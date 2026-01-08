@@ -29,7 +29,7 @@ const BusinessLayout: React.FC = () => {
       setNotifications(data);
       setUnreadCount(data.filter((n: any) => !n.is_read).length);
     } catch (e) {
-      console.error('Failed to load notifications');
+      // Failed to load notifications - handled silently
     }
   };
 

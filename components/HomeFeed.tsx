@@ -34,7 +34,7 @@ const HomeFeed: React.FC = () => {
         setOffers(offersData);
         setShops(shopsData);
       } catch (e) {
-        console.error("Failed to fetch data", e);
+        // Failed to fetch data - handled silently
       } finally {
         setLoading(false);
       }

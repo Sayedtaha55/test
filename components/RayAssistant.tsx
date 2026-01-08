@@ -71,7 +71,7 @@ const RayAssistant: React.FC<RayAssistantProps> = ({ isOpen, onClose }) => {
         links: links.length > 0 ? links : undefined
       }]);
     } catch (error) {
-      console.error(error);
+      // Network error - handled gracefully
       setMessages(prev => [...prev, { role: 'ai', content: "حصلت مشكلة بسيطة في الشبكة، جرب تسألني تاني يا بطل." }]);
     } finally {
       setLoading(false);
