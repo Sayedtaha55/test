@@ -6,7 +6,7 @@ import {
   Package, CalendarCheck, Settings, Smartphone, Palette, 
   Plus, DollarSign, Users, ShoppingBag, 
   CreditCard, TrendingUp, Bell, Clock, Tag, Trash2, Send, MessageSquare, Megaphone, CheckCircle2, ChevronRight,
-  MapPin, User, Phone, MessageCircle, X, Image as ImageIcon, Upload, Wand2, ShoppingCart
+  MapPin, User, Phone, MessageCircle, X, Image as ImageIcon, Upload, Wand2, ShoppingCart, BarChart3, UserMinus, UserCheck, Search as SearchIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ApiService } from '../services/api.service';
@@ -14,13 +14,13 @@ import * as ReactRouterDOM from 'react-router-dom';
 import { Product, Reservation, Offer } from '../types';
 import POSSystem from './POSSystem';
 import PageBuilder from './PageBuilder';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar } from 'recharts';
 import { useToast } from './Toaster';
 
 const { useSearchParams, useNavigate } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
 
-type TabType = 'overview' | 'pos' | 'builder' | 'products' | 'reservations' | 'sales' | 'promotions' | 'growth' | 'chats' | 'settings';
+type TabType = 'overview' | 'pos' | 'builder' | 'products' | 'reservations' | 'sales' | 'promotions' | 'growth' | 'chats' | 'settings' | 'reports' | 'customers';
 
 const MerchantDashboard: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -107,6 +107,8 @@ const MerchantDashboard: React.FC = () => {
       case 'sales': return <SalesTab sales={sales} />;
       case 'chats': return <ChatsTab shopId={currentShop.id} />;
       case 'growth': return <GrowthTab shop={currentShop} analytics={analytics} products={products} />;
+      case 'reports': return <ReportsTab analytics={analytics} sales={sales} />;
+      case 'customers': return <CustomersTab shopId={currentShop.id} />;
       case 'settings': return <SettingsTab shop={currentShop} />;
       default: return <OverviewTab shop={currentShop} analytics={analytics} notifications={notifications} />;
     }
@@ -147,6 +149,8 @@ const MerchantDashboard: React.FC = () => {
       {/* Enhanced Navigation */}
       <div className="flex gap-2 p-2 bg-slate-100/60 backdrop-blur-xl rounded-[2.5rem] border border-white/40 overflow-x-auto no-scrollbar sticky top-24 z-40 shadow-inner">
         <TabButton active={activeTab === 'overview'} onClick={() => setSearchParams({ tab: 'overview' })} icon={<TrendingUp size={18} />} label="نظرة عامة" />
+        <TabButton active={activeTab === 'reports'} onClick={() => setSearchParams({ tab: 'reports' })} icon={<BarChart3 size={18} />} label="التقارير" />
+        <TabButton active={activeTab === 'customers'} onClick={() => setSearchParams({ tab: 'customers' })} icon={<Users size={18} />} label="العملاء" />
         <TabButton active={activeTab === 'products'} onClick={() => setSearchParams({ tab: 'products' })} icon={<Package size={18} />} label="المخزون" />
         <TabButton active={activeTab === 'promotions'} onClick={() => setSearchParams({ tab: 'promotions' })} icon={<Megaphone size={18} />} label="العروض" />
         <TabButton active={activeTab === 'reservations'} onClick={() => setSearchParams({ tab: 'reservations' })} icon={<CalendarCheck size={18} />} label="الحجوزات" />
@@ -166,6 +170,140 @@ const MerchantDashboard: React.FC = () => {
 
       <AddProductModal isOpen={showProductModal} onClose={() => { setShowProductModal(false); syncData(); }} shopId={currentShop.id} />
       <CreateOfferModal product={showOfferModal} onClose={() => { setShowOfferModal(null); syncData(); }} shopId={currentShop.id} />
+    </div>
+  );
+};
+
+// --- New: Reports Tab ---
+const ReportsTab: React.FC<{ analytics: any, sales: any[] }> = ({ analytics, sales }) => {
+  const monthlyData = [
+    { name: 'يناير', revenue: 12000 },
+    { name: 'فبراير', revenue: 19000 },
+    { name: 'مارس', revenue: 15000 },
+    { name: 'أبريل', revenue: 22000 },
+    { name: 'مايو', revenue: 30000 },
+    { name: 'يونيو', revenue: 28000 },
+  ];
+
+  return (
+    <div className="space-y-10">
+      <div className="bg-white p-12 rounded-[3.5rem] border border-slate-100 shadow-sm">
+        <div className="flex items-center justify-between mb-12 flex-row-reverse">
+          <h3 className="text-3xl font-black">أداء الإيرادات الشهرية</h3>
+          <div className="flex gap-2">
+            <span className="bg-slate-50 px-4 py-2 rounded-xl text-xs font-bold">آخر ٦ أشهر</span>
+          </div>
+        </div>
+        <div className="h-[450px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlyData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold', fill: '#94a3b8' }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold', fill: '#94a3b8' }} />
+              <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }} />
+              <Bar dataKey="revenue" fill="#00E5FF" radius={[10, 10, 0, 0]} barSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <ReportSummaryCard label="متوسط قيمة السلة" value="ج.م ٤٥٠" growth="+١٢٪" />
+        <ReportSummaryCard label="نسبة التحويل" value="٨.٥٪" growth="+٥٪" />
+        <ReportSummaryCard label="العائد المتوقع" value="ج.م ٣٤,٠٠٠" growth="+٢٠٪" />
+      </div>
+    </div>
+  );
+};
+
+const ReportSummaryCard = ({ label, value, growth }: any) => (
+  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 text-right">
+    <p className="text-slate-400 font-black text-xs uppercase mb-2">{label}</p>
+    <div className="flex items-end justify-between flex-row-reverse">
+       <span className="text-3xl font-black">{value}</span>
+       <span className="text-green-500 font-bold text-xs bg-green-50 px-3 py-1 rounded-full">{growth}</span>
+    </div>
+  </div>
+);
+
+// --- New: Customers Tab ---
+const CustomersTab: React.FC<{ shopId: string }> = ({ shopId }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [customers, setCustomers] = useState([
+    { id: 'c1', name: 'أحمد محمود', email: 'ahmed@test.com', totalSpent: 1200, status: 'active', orders: 4 },
+    { id: 'c2', name: 'سارة علي', email: 'sara@test.com', totalSpent: 2500, status: 'active', orders: 7 },
+    { id: 'c3', name: 'ياسين كمال', email: 'yassin@test.com', totalSpent: 0, status: 'blocked', orders: 0 },
+    { id: 'c4', name: 'مي حسن', email: 'mai@test.com', totalSpent: 850, status: 'active', orders: 2 },
+  ]);
+  const { addToast } = useToast();
+
+  const toggleStatus = (id: string) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === id) {
+        const newStatus = c.status === 'active' ? 'blocked' : 'active';
+        addToast(`تم ${newStatus === 'active' ? 'تفعيل' : 'إيقاف'} حساب العميل`, 'info');
+        return { ...c, status: newStatus };
+      }
+      return c;
+    }));
+  };
+
+  const filtered = customers.filter(c => c.name.includes(searchTerm) || c.email.includes(searchTerm));
+
+  return (
+    <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12 flex-row-reverse">
+        <h3 className="text-3xl font-black">قاعدة بيانات العملاء</h3>
+        <div className="relative w-full md:w-96">
+           <SearchIcon className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+           <input 
+             value={searchTerm}
+             onChange={e => setSearchTerm(e.target.value)}
+             placeholder="بحث باسم العميل أو بريده..."
+             className="w-full bg-slate-50 rounded-2xl py-4 pr-14 pl-6 font-bold outline-none border-none text-right focus:ring-2 focus:ring-[#00E5FF]/20 transition-all"
+           />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-right border-collapse min-w-[800px]">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100">
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">العميل</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">إجمالي المشتريات</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">عدد الطلبات</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">التحكم</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(c => (
+              <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
+                <td className="p-6">
+                   <div className="flex items-center gap-4 flex-row-reverse">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-400">{c.name.charAt(0)}</div>
+                      <div>
+                        <p className="font-black text-slate-900">{c.name}</p>
+                        <p className="text-xs text-slate-400 font-bold">{c.email}</p>
+                      </div>
+                   </div>
+                </td>
+                <td className="p-6 font-black text-slate-900">ج.م {c.totalSpent.toLocaleString()}</td>
+                <td className="p-6 font-black text-slate-500">{c.orders} طلبات</td>
+                <td className="p-6 text-left">
+                  <button 
+                    onClick={() => toggleStatus(c.id)}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                      c.status === 'active' ? 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'bg-green-50 text-green-500 hover:bg-green-500 hover:text-white'
+                    }`}
+                  >
+                    {c.status === 'active' ? <div className="flex items-center gap-2">إيقاف <UserMinus size={14}/></div> : <div className="flex items-center gap-2">تفعيل <UserCheck size={14}/></div>}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
