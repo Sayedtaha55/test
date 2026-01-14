@@ -138,7 +138,18 @@ const HomeFeed: React.FC = () => {
                       <button onClick={() => setSelectedItem(offer)} className="w-12 h-12 bg-[#00E5FF] rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-md"><CalendarCheck size={20} /></button>
                       <button 
                         onClick={() => {
-                          const event = new CustomEvent('add-to-cart', { detail: { ...offer, name: offer.title, price: offer.newPrice, quantity: 1 } });
+                          const event = new CustomEvent('add-to-cart', {
+                            detail: {
+                              ...offer,
+                              id: (offer as any).productId || offer.id,
+                              productId: (offer as any).productId,
+                              shopId: (offer as any).shopId,
+                              shopName: (offer as any).shopName,
+                              name: offer.title,
+                              price: offer.newPrice,
+                              quantity: 1
+                            }
+                          });
                           window.dispatchEvent(event);
                         }}
                         className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-md"

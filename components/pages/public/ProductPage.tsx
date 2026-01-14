@@ -77,6 +77,7 @@ const ProductPage: React.FC = () => {
     const event = new CustomEvent('add-to-cart', { 
       detail: { 
         ...product, 
+        price: offer ? offer.newPrice : product.price,
         quantity: 1, 
         shopId: shop?.id, 
         shopName: shop?.name 

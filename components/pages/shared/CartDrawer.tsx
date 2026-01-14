@@ -3,9 +3,11 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Trash2, CreditCard, Loader2, CheckCircle2, Plus, Minus } from 'lucide-react';
 import { ApiService } from '@/services/api.service';
+import { RayDB } from '@/constants';
 
 interface CartItem {
   id: string;
+  lineId?: string;
   name: string;
   price: number;
   quantity: number;
@@ -18,9 +20,10 @@ interface CartDrawerProps {
   onClose: () => void;
   items: CartItem[];
   onRemove: (id: string) => void;
+  onUpdateQuantity?: (id: string, delta: number) => void;
 }
 
-const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, items, onRemove }) => {
+const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, items, onRemove, onUpdateQuantity }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -34,8 +37,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, items, onRemov
   }, [items]);
 
   const updateQuantity = (id: string, delta: number) => {
+    onUpdateQuantity?.(id, delta);
     setLocalItems(prev => prev.map(item => {
-      if (item.id === id) {
+      const key = String(item.lineId || `${item.shopId || 'unknown'}:${item.id}`);
+      if (key === id) {
         return { ...item, quantity: Math.max(1, item.quantity + delta) };
       }
       return item;
@@ -69,6 +74,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, items, onRemov
           paymentMethod: 'card'
         });
       }
+      RayDB.clearCart();
       setIsProcessing(false);
       setShowSuccess(true);
       window.dispatchEvent(new Event('orders-updated'));
@@ -126,15 +132,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, items, onRemov
                             <p className="font-black text-sm">{String(item.name)}</p>
                             <p className="text-[#00E5FF] font-black text-xs">ج.م {Number(item.price)}</p>
                           </div>
-                          <button onClick={() => onRemove(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                          <button onClick={() => onRemove(String(item.lineId || `${item.shopId || 'unknown'}:${item.id}`))} className="text-slate-300 hover:text-red-500 transition-colors">
                             <Trash2 size={18} />
                           </button>
                         </div>
                         <div className="flex items-center justify-between flex-row-reverse">
                            <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
-                              <button onClick={() => updateQuantity(item.id, 1)} className="text-slate-900 hover:text-[#00E5FF]"><Plus size={16} /></button>
+                              <button onClick={() => updateQuantity(String(item.lineId || `${item.shopId || 'unknown'}:${item.id}`), 1)} className="text-slate-900 hover:text-[#00E5FF]"><Plus size={16} /></button>
                               <span className="font-black text-sm w-4 text-center">{Number(item.quantity)}</span>
-                              <button onClick={() => updateQuantity(item.id, -1)} className="text-slate-900 hover:text-red-500"><Minus size={16} /></button>
+                              <button onClick={() => updateQuantity(String(item.lineId || `${item.shopId || 'unknown'}:${item.id}`), -1)} className="text-slate-900 hover:text-red-500"><Minus size={16} /></button>
                            </div>
                            <p className="font-black text-lg text-slate-900">ج.م {Number(item.price) * Number(item.quantity)}</p>
                         </div>

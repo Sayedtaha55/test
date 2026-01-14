@@ -459,7 +459,7 @@ const ShopProfile: React.FC = () => {
                       offer={offers.find(o => o.productId === p.id)}
                       onAdd={(prod, price) => {
                         setAddedItemId(prod.id);
-                        window.dispatchEvent(new CustomEvent('add-to-cart', { detail: { ...prod, price, quantity: 1, shopId: shop.id, shopName: shop.name } }));
+                        RayDB.addToCart({ ...prod, price, quantity: 1, shopId: shop.id, shopName: shop.name });
                         setTimeout(() => setAddedItemId(null), 1500);
                       }} 
                       isAdded={addedItemId === p.id} 

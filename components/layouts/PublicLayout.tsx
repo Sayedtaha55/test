@@ -4,6 +4,7 @@ import * as ReactRouterDOM from 'react-router-dom';
 import { Search, User, Sparkles, Bell, Heart, ShoppingCart, Menu, X, LogOut, Info, PlusCircle } from 'lucide-react';
 import { RayAssistant, CartDrawer } from '@/components';
 import { motion, AnimatePresence } from 'framer-motion';
+import { RayDB } from '@/constants';
 
 const { Link, Outlet, useLocation, useNavigate } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
@@ -28,14 +29,20 @@ const PublicLayout: React.FC = () => {
     };
     checkAuth();
     const handleAddToCart = (e: any) => {
-      setCartItems(prev => [...prev, e.detail]);
+      RayDB.addToCart(e.detail);
       setCartOpen(true);
     };
+    const syncCart = () => {
+      setCartItems(RayDB.getCart());
+    };
+    syncCart();
     window.addEventListener('add-to-cart', handleAddToCart);
+    window.addEventListener('cart-updated', syncCart);
     window.addEventListener('auth-change', checkAuth);
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('add-to-cart', handleAddToCart);
+      window.removeEventListener('cart-updated', syncCart);
       window.removeEventListener('auth-change', checkAuth);
     };
   }, []);
@@ -48,9 +55,15 @@ const PublicLayout: React.FC = () => {
     navigate('/');
   };
 
-  const removeFromCart = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (lineId: string) => {
+    RayDB.removeFromCart(lineId);
   };
+
+  const updateCartItemQuantity = (lineId: string, delta: number) => {
+    RayDB.updateCartItemQuantity(lineId, delta);
+  };
+
+  const hideCartButton = String(location?.pathname || '').startsWith('/shop/');
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] text-[#1A1A1A] selection:bg-[#00E5FF] selection:text-black font-sans">
@@ -86,17 +99,19 @@ const PublicLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1 md:gap-4">
-            <button 
-              onClick={() => setCartOpen(true)}
-              className="relative w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center hover:bg-slate-100 group transition-all"
-            >
-              <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-slate-500 group-hover:text-black" />
-              {cartItems.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 bg-[#BD00FF] text-white text-[8px] md:text-[10px] font-black rounded-full flex items-center justify-center ring-2 md:ring-4 ring-white">
-                  {cartItems.length}
-                </span>
-              )}
-            </button>
+            {!hideCartButton && (
+              <button 
+                onClick={() => setCartOpen(true)}
+                className="relative w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center hover:bg-slate-100 group transition-all"
+              >
+                <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-slate-500 group-hover:text-black" />
+                {cartItems.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 bg-[#BD00FF] text-white text-[8px] md:text-[10px] font-black rounded-full flex items-center justify-center ring-2 md:ring-4 ring-white">
+                    {cartItems.length}
+                  </span>
+                )}
+              </button>
+            )}
             <div className="h-6 md:h-8 w-[1px] bg-slate-100 mx-1 md:mx-2 hidden sm:block" />
             {user ? (
               <Link to={user.role === 'merchant' ? '/business/dashboard' : '/profile'} className="flex items-center gap-2 md:gap-3 bg-slate-900 text-white pl-3 pr-1 py-1 rounded-full hover:bg-black transition-all">
@@ -144,7 +159,7 @@ const PublicLayout: React.FC = () => {
       </main>
 
       <RayAssistant isOpen={isAssistantOpen} onClose={() => setAssistantOpen(false)} />
-      <CartDrawer isOpen={isCartOpen} onClose={() => setCartOpen(false)} items={cartItems} onRemove={removeFromCart} />
+      <CartDrawer isOpen={isCartOpen} onClose={() => setCartOpen(false)} items={cartItems} onRemove={removeFromCart} onUpdateQuantity={updateCartItemQuantity} />
 
       <footer className="bg-[#1A1A1A] text-white pt-16 md:pt-32 pb-12 mt-16 md:mt-32 rounded-t-[2rem] md:rounded-t-[4rem]">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-20 text-right">
