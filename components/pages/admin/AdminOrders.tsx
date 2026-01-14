@@ -12,10 +12,7 @@ const AdminOrders: React.FC = () => {
         const data = await ApiService.getAllOrders();
         setOrders(data);
       } catch (e) {
-        setOrders([
-          { id: 'ORD-1234', total: 1500, created_at: new Date().toISOString(), status: 'completed' },
-          { id: 'ORD-5678', total: 850, created_at: new Date().toISOString(), status: 'pending' }
-        ]);
+        setOrders([]);
       } finally {
         setLoading(false);
       }

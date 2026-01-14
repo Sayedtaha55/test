@@ -400,9 +400,11 @@ export class ShopService {
     }
   }
 
-  async getShopAnalytics(shopId: string) {
+  async getShopAnalytics(shopId: string, range?: { from?: Date; to?: Date }) {
     const startTime = Date.now();
-    const cacheKey = `shop:${shopId}:analytics`;
+    const from = range?.from;
+    const to = range?.to;
+    const cacheKey = `shop:${shopId}:analytics:${from ? from.toISOString() : 'null'}:${to ? to.toISOString() : 'null'}`;
     
     try {
       // Try to get from cache first (cache for 5 minutes)
@@ -414,38 +416,91 @@ export class ShopService {
         return cachedAnalytics;
       }
 
-      const today = new Date();
-      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const effectiveTo = to && !Number.isNaN(to.getTime()) ? to : now;
+      const effectiveFrom = from && !Number.isNaN(from.getTime()) ? from : new Date(effectiveTo.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const analytics = await this.prisma.shopAnalytics.findMany({
-        where: {
-          shopId,
-          date: {
-            gte: thirtyDaysAgo,
-            lte: today,
-          },
-        },
-        orderBy: {
-          date: 'asc',
-        },
+      const shop = await this.prisma.shop.findUnique({
+        where: { id: shopId },
+        select: { id: true, visitors: true, followers: true },
       });
 
-      const totalRevenue = analytics.reduce((sum, a) => sum + a.revenue, 0);
-      const totalOrders = analytics.reduce((sum, a) => sum + a.ordersCount, 0);
-      const totalVisitors = analytics.reduce((sum, a) => sum + a.visitorsCount, 0);
+      const ordersInRange = await this.prisma.order.findMany({
+        where: {
+          shopId,
+          createdAt: {
+            gte: effectiveFrom,
+            lte: effectiveTo,
+          },
+        },
+        select: { id: true, userId: true, total: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const totalRevenue = ordersInRange.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      const totalOrders = ordersInRange.length;
+      const userIds = new Set(ordersInRange.map((o) => String(o.userId)));
+      const totalUsers = userIds.size;
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+      const todayOrders = ordersInRange.filter((o) => {
+        const t = new Date(o.createdAt).getTime();
+        return t >= todayStart.getTime() && t < todayEnd.getTime();
+      });
+
+      const salesCountToday = todayOrders.length;
+      const revenueToday = todayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
+      // Last 7 days chart (within available range)
+      const chartFrom = new Date(effectiveTo);
+      chartFrom.setHours(0, 0, 0, 0);
+      chartFrom.setDate(chartFrom.getDate() - 6);
+
+      const chartBuckets: Record<string, number> = {};
+      for (let i = 0; i < 7; i += 1) {
+        const d = new Date(chartFrom);
+        d.setDate(chartFrom.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        chartBuckets[key] = 0;
+      }
+
+      for (const o of ordersInRange) {
+        const dt = new Date(o.createdAt);
+        const key = dt.toISOString().slice(0, 10);
+        if (typeof chartBuckets[key] === 'number') {
+          chartBuckets[key] += Number(o.total) || 0;
+        }
+      }
+
+      const chartData = Object.keys(chartBuckets)
+        .sort()
+        .map((key) => {
+          const d = new Date(key);
+          return {
+            name: d.toLocaleDateString('ar-EG', { weekday: 'short' }),
+            sales: Math.round(chartBuckets[key]),
+          };
+        });
 
       const result = {
-        revenue: totalRevenue,
-        orders: totalOrders,
-        visitors: totalVisitors,
-        dailyAnalytics: analytics,
+        totalRevenue,
+        totalOrders,
+        totalUsers,
+        visitorsCount: Number(shop?.visitors || 0),
+        followersCount: Number(shop?.followers || 0),
+        salesCountToday,
+        revenueToday,
+        chartData,
       };
 
       // Cache analytics for 5 minutes
       await this.redis.set(cacheKey, result, 300);
       
       const duration = Date.now() - startTime;
-      this.monitoring.trackDatabase('findMany', 'shop_analytics', duration, true);
+      this.monitoring.trackDatabase('findMany', 'orders', duration, true);
       this.monitoring.trackPerformance('getShopAnalytics_database', duration);
       
       return result;

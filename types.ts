@@ -65,6 +65,7 @@ export interface Reservation {
   shopName: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   status: 'pending' | 'completed' | 'expired';
   createdAt: number;
 }

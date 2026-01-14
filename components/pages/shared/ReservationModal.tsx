@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Phone, User, Clock, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { RayDB } from '@/constants';
 import { Reservation } from '@/types';
+import { ApiService } from '@/services/api.service';
 
 interface ReservationModalProps {
   isOpen: boolean;
@@ -22,6 +23,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'form' | 'success'>('form');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,29 +43,34 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
     }
   }, [isOpen]);
 
-  const handleReserve = (e: React.FormEvent) => {
+  const handleReserve = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!item) return;
+    setIsSubmitting(true);
+    setError(null);
 
-    const newReservation: Reservation = {
-      id: Math.random().toString(36).substr(2, 9),
-      itemId: String(item.id),
-      itemName: String(item.name),
-      itemImage: String(item.image),
-      itemPrice: Number(item.price),
-      shopId: String(item.shopId),
-      shopName: String(item.shopName),
-      customerName: name,
-      customerPhone: phone,
-      status: 'pending',
-      createdAt: Date.now()
-    };
+    try {
+      const reservation = {
+        itemId: String(item.id),
+        itemName: String(item.name),
+        itemImage: String(item.image),
+        itemPrice: Number(item.price),
+        shopId: String(item.shopId),
+        shopName: String(item.shopName),
+        customerName: name,
+        customerPhone: phone,
+      };
 
-    RayDB.addReservation(newReservation);
-    setStep('success');
-    setTimeout(() => {
-      onClose();
-    }, 2500);
+      await ApiService.addReservation(reservation);
+      setStep('success');
+      setTimeout(() => {
+        onClose();
+      }, 2500);
+    } catch (err: any) {
+      setError(err?.message || 'فشل إرسال الحجز، يرجى المحاولة مرة أخرى');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -133,6 +141,13 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
                     </div>
                   </div>
 
+                  {error && (
+                  <div className="p-4 bg-red-50 rounded-2xl border border-red-100 mb-4 flex gap-3 flex-row-reverse">
+                     <ShieldCheck size={20} className="text-red-500 shrink-0" />
+                     <p className="text-xs font-bold text-red-700 leading-relaxed">{error}</p>
+                  </div>
+                )}
+
                   <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 mb-4 flex gap-3 flex-row-reverse">
                      <ShieldCheck size={20} className="text-amber-500 shrink-0" />
                      <p className="text-[10px] font-bold text-amber-700 leading-relaxed">
@@ -140,8 +155,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, it
                      </p>
                   </div>
 
-                  <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl">
-                    تأكيد الحجز مجاناً
+                  <button disabled={isSubmitting} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isSubmitting ? 'جاري إرسال الحجز...' : 'تأكيد الحجز مجاناً'}
                   </button>
                 </form>
               </div>

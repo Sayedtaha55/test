@@ -4,6 +4,8 @@ import { Shop, Product, Offer, Reservation, Category, ShopGallery } from '../typ
 class MockDatabase {
   private shops: any[] = [];
   private messages: any[] = [];
+  private knownMessageIds: Set<string> = new Set();
+  private messageSubscribers: Record<string, Set<(payload: any) => void>> = {};
   private notifications: any[] = [];
   private offers: any[] = [];
   private products: any[] = [];
@@ -14,11 +16,69 @@ class MockDatabase {
   private themes: any[] = [];
   private analytics: any = {
     totalRevenue: 125000,
-    totalUsers: 8432,
-    totalShops: 156,
-    totalOrders: 3421
+    totalOrders: 850,
+    totalCustomers: 1200,
+    revenueGrowth: 12.5,
+    orderGrowth: 8.3,
+    customerGrowth: 15.2
   };
   private shopAnalytics: Record<string, any> = {};
+
+  constructor() {
+    this.loadMessagesFromStorage();
+  }
+
+  private normalizeStoredMessage(msg: any) {
+    const shopIdRaw = msg?.shopId ?? msg?.shop_id;
+    const role = msg?.role;
+    const sender_id = msg?.sender_id ?? msg?.senderId;
+    const sender_name = msg?.sender_name ?? msg?.senderName;
+    const content = msg?.content ?? msg?.text ?? '';
+    const created_at = msg?.created_at ?? msg?.createdAt ?? new Date().toISOString();
+    const userId = msg?.userId ?? msg?.user_id ?? (role === 'customer' ? sender_id : undefined);
+
+    const shopId = shopIdRaw != null ? String(shopIdRaw) : '';
+    const normalizedSenderId = sender_id != null ? String(sender_id) : '';
+    const normalizedUserId = userId != null ? String(userId) : undefined;
+
+    if (!shopId || !normalizedSenderId || !role) return null;
+
+    return {
+      id: String(msg?.id ?? Date.now().toString()),
+      shopId,
+      userId: normalizedUserId,
+      sender_id: normalizedSenderId,
+      sender_name,
+      role,
+      content,
+      created_at,
+    };
+  }
+
+  private loadMessagesFromStorage() {
+    try {
+      const raw = localStorage.getItem('ray_mock_messages');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        this.messages = parsed
+          .map((m: any) => this.normalizeStoredMessage(m))
+          .filter(Boolean);
+        this.knownMessageIds = new Set(this.messages.map((m: any) => String(m.id)));
+        this.saveMessagesToStorage();
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private saveMessagesToStorage() {
+    try {
+      localStorage.setItem('ray_mock_messages', JSON.stringify(this.messages));
+    } catch {
+      // ignore
+    }
+  }
 
   // Auth methods
   async login(email: string, pass: string) {
@@ -110,27 +170,124 @@ class MockDatabase {
 
   // Chat methods
   async sendMessage(msg: any) {
+    const shopId = msg?.shopId ?? msg?.shop_id;
+    const role = msg?.role;
+    const sender_id = msg?.sender_id ?? msg?.senderId;
+    const sender_name = msg?.sender_name ?? msg?.senderName;
+    const content = msg?.content ?? msg?.text ?? '';
+
+    const userId = (() => {
+      if (msg?.userId) return msg.userId;
+      if (role === 'customer') return sender_id;
+      return undefined;
+    })();
+
     const message = {
-      ...msg,
       id: Date.now().toString(),
-      created_at: new Date().toISOString()
+      shopId: shopId != null ? String(shopId) : shopId,
+      userId: userId != null ? String(userId) : userId,
+      sender_id: sender_id != null ? String(sender_id) : sender_id,
+      sender_name,
+      role,
+      content,
+      created_at: new Date().toISOString(),
     };
+
     this.messages.push(message);
+    this.knownMessageIds.add(String(message.id));
+    this.saveMessagesToStorage();
+
+    if (shopId && this.messageSubscribers[shopId]) {
+      for (const cb of this.messageSubscribers[shopId]) {
+        try {
+          cb(message);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
     return { error: null };
   }
 
   async getMessages(shopId: string, userId: string) {
-    return this.messages.filter(m => m.shopId === shopId);
+    const sid = String(shopId);
+    const uid = String(userId);
+    return this.messages.filter(m => String(m.shopId ?? m.shop_id) === sid && String(m.userId ?? m.user_id) === uid);
   }
 
   async getMerchantChats(shopId: string) {
-    return this.messages.filter(m => m.shopId === shopId);
+    const sid = String(shopId);
+    const shopMessages = this.messages
+      .map((m: any) => this.normalizeStoredMessage(m) || null)
+      .filter(Boolean)
+      .filter((m: any) => String(m.shopId) === sid && m.userId);
+    const byUserId: Record<string, any[]> = {};
+    for (const m of shopMessages) {
+      const uid = String(m.userId);
+      if (!byUserId[uid]) byUserId[uid] = [];
+      byUserId[uid].push(m);
+    }
+
+    const chats = Object.entries(byUserId).map(([userId, msgs]) => {
+      const sorted = msgs.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const last = sorted[sorted.length - 1];
+      const customerMsg = sorted.find(m => m.role === 'customer');
+      return {
+        userId,
+        userName: customerMsg?.sender_name || 'عميل',
+        lastMessage: last?.content || '',
+        lastMessageAt: last?.created_at,
+      };
+    });
+
+    return chats.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
   }
 
   subscribeToMessages(shopId: string, callback: (payload: any) => void) {
-    // Mock subscription - in real app, use WebSocket
+    if (!this.messageSubscribers[shopId]) {
+      this.messageSubscribers[shopId] = new Set();
+    }
+    this.messageSubscribers[shopId].add(callback);
+
+    const onStorage = (e: StorageEvent) => {
+      try {
+        if (e.key !== 'ray_mock_messages' || !e.newValue) return;
+        const parsed = JSON.parse(e.newValue);
+        if (!Array.isArray(parsed)) return;
+        const normalized = parsed
+          .map((m: any) => this.normalizeStoredMessage(m))
+          .filter(Boolean);
+
+        for (const m of normalized) {
+          const id = String(m.id);
+          if (this.knownMessageIds.has(id)) continue;
+          this.knownMessageIds.add(id);
+          this.messages.push(m);
+          if (m.shopId === shopId) {
+            try {
+              callback(m);
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', onStorage);
+    }
+
     return {
-      unsubscribe: () => {}
+      unsubscribe: () => {
+        this.messageSubscribers[shopId]?.delete(callback);
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('storage', onStorage);
+        }
+      }
     };
   }
 
@@ -339,6 +496,57 @@ class MockDatabase {
   // User management
   async getAllUsers() {
     return this.users;
+  }
+
+  // Customer management
+  private customers: any[] = [];
+
+  async getShopCustomers(shopId: string) {
+    return this.customers.filter(c => c.shopId === shopId);
+  }
+
+  async convertReservationToCustomer(customerData: any) {
+    // Check if customer already exists
+    const existingCustomer = this.customers.find(c => 
+      c.shopId === customerData.shopId && 
+      (c.phone === customerData.customerPhone || c.email === customerData.customerEmail)
+    );
+
+    if (existingCustomer) {
+      // Update existing customer
+      existingCustomer.orders += 1;
+      existingCustomer.totalSpent += customerData.firstPurchaseAmount || 0;
+      existingCustomer.lastPurchaseDate = new Date().toISOString();
+      existingCustomer.lastPurchaseItem = customerData.firstPurchaseItem;
+      return existingCustomer;
+    } else {
+      // Create new customer
+      const customer = {
+        id: Date.now().toString(),
+        name: customerData.customerName,
+        phone: customerData.customerPhone,
+        email: customerData.customerEmail,
+        shopId: customerData.shopId,
+        convertedFromReservation: true,
+        createdAt: new Date().toISOString(),
+        lastPurchaseDate: new Date().toISOString(),
+        firstPurchaseItem: customerData.firstPurchaseItem,
+        orders: 1,
+        totalSpent: customerData.firstPurchaseAmount || 0,
+        status: 'active'
+      };
+      this.customers.push(customer);
+      return customer;
+    }
+  }
+
+  async updateCustomerStatus(customerId: string, status: string) {
+    const customer = this.customers.find(c => c.id === customerId);
+    if (customer) {
+      customer.status = status;
+      return customer;
+    }
+    throw new Error('Customer not found');
   }
 
   async deleteUser(id: string) {
@@ -580,6 +788,31 @@ async function backendPatch<T>(path: string, body: any): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function backendPut<T>(path: string, body: any): Promise<T> {
+  const token = getAuthToken();
+  const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const data = await res.json();
+      message = data?.message || data?.error || message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<T>;
+}
+
 function normalizeUserFromBackend(user: any) {
   return {
     ...user,
@@ -617,6 +850,45 @@ function normalizeProductFromBackend(product: any) {
     stock: typeof product.stock === 'number' ? product.stock : Number(product.stock || 0),
     price: typeof product.price === 'number' ? product.price : Number(product.price || 0),
   };
+}
+
+function normalizeOrderFromBackend(order: any) {
+  if (!order) return order;
+  const createdAt = order.createdAt ?? order.created_at;
+  const shopId = order.shopId ?? order.shop_id;
+  return {
+    ...order,
+    createdAt,
+    created_at: order.created_at ?? createdAt,
+    shopId,
+    shop_id: order.shop_id ?? shopId,
+    total: typeof order.total === 'number' ? order.total : Number(order.total || 0),
+  };
+}
+
+function getLocalShopIdFromStorage(): string | undefined {
+  try {
+    const raw = localStorage.getItem('ray_user');
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (parsed?.shopId) return String(parsed.shopId);
+    if (parsed?.shop_id) return String(parsed.shop_id);
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getLocalUserRoleFromStorage(): string | undefined {
+  try {
+    const raw = localStorage.getItem('ray_user');
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (parsed?.role) return String(parsed.role);
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function loginViaBackend(email: string, pass: string) {
@@ -721,10 +993,24 @@ export const ApiService = {
   incrementVisitors: mockDb.incrementVisitors.bind(mockDb),
 
   // Offers
-  getOffers: mockDb.getOffers.bind(mockDb),
-  createOffer: mockDb.createOffer.bind(mockDb),
-  deleteOffer: mockDb.deleteOffer.bind(mockDb),
-  getOfferByProductId: mockDb.getOfferByProductId.bind(mockDb),
+  getOffers: async () => {
+    const offers = await backendGet<any[]>('/api/v1/offers');
+    return offers || [];
+  },
+  createOffer: async (offer: any) => {
+    const created = await backendPost<any>('/api/v1/offers', offer);
+    window.dispatchEvent(new Event('ray-db-update'));
+    return created;
+  },
+  deleteOffer: async (offerId: string) => {
+    const deleted = await backendDelete<any>(`/api/v1/offers/${encodeURIComponent(offerId)}`);
+    window.dispatchEvent(new Event('ray-db-update'));
+    return deleted;
+  },
+  getOfferByProductId: async (productId: string) => {
+    const offers = await backendGet<any[]>('/api/v1/offers');
+    return (offers || []).find((o: any) => o.productId === productId || o.product_id === productId);
+  },
 
   // Products
   getProducts: async (shopId?: string) => {
@@ -752,25 +1038,88 @@ export const ApiService = {
   },
 
   // Reservations
-  getReservations: mockDb.getReservations.bind(mockDb),
-  addReservation: mockDb.addReservation.bind(mockDb),
-  updateReservationStatus: mockDb.updateReservationStatus.bind(mockDb),
+  getReservations: async (shopId?: string) => {
+    if (shopId) {
+      return backendGet<any[]>(`/api/v1/reservations?shopId=${encodeURIComponent(shopId)}`);
+    }
+    return backendGet<any[]>('/api/v1/reservations/me');
+  },
+  addReservation: async (reservation: any) => {
+    return backendPost<any>('/api/v1/reservations', {
+      itemId: reservation.itemId,
+      itemName: reservation.itemName,
+      itemImage: reservation.itemImage,
+      itemPrice: reservation.itemPrice,
+      shopId: reservation.shopId,
+      shopName: reservation.shopName,
+      customerName: reservation.customerName,
+      customerPhone: reservation.customerPhone,
+    });
+  },
+  updateReservationStatus: async (id: string, status: string) => {
+    return backendPatch<any>(`/api/v1/reservations/${encodeURIComponent(id)}/status`, { status });
+  },
 
   // Orders / Sales
-  getAllOrders: mockDb.getAllOrders.bind(mockDb),
+  getAllOrders: async (opts?: { shopId?: string; from?: string; to?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.shopId) params.set('shopId', String(opts.shopId));
+    if (opts?.from) params.set('from', String(opts.from));
+    if (opts?.to) params.set('to', String(opts.to));
+    const qs = params.toString();
+
+    // Admin endpoint
+    const localRole = String(getLocalUserRoleFromStorage() || '').toUpperCase();
+    if (localRole === 'ADMIN') {
+      try {
+        const data = await backendGet<any[]>(`/api/v1/orders/admin${qs ? `?${qs}` : ''}`);
+        return (data || []).map(normalizeOrderFromBackend);
+      } catch {
+        // ignore
+      }
+    }
+
+    const shopId = opts?.shopId || getLocalShopIdFromStorage();
+    if (shopId) {
+      const merchantParams = new URLSearchParams();
+      merchantParams.set('shopId', String(shopId));
+      if (opts?.from) merchantParams.set('from', String(opts.from));
+      if (opts?.to) merchantParams.set('to', String(opts.to));
+      const qs2 = merchantParams.toString();
+      try {
+        const data = await backendGet<any[]>(`/api/v1/orders${qs2 ? `?${qs2}` : ''}`);
+        return (data || []).map(normalizeOrderFromBackend);
+      } catch {
+        // ignore
+      }
+    }
+
+    return [];
+  },
   addSale: mockDb.addSale.bind(mockDb),
-  placeOrder: async (order: { items: any[]; total: number; paymentMethod?: string }) => {
-    const sale = {
-      totalAmount: order.total,
+  placeOrder: async (order: { items: any[]; total: number; paymentMethod?: string; shopId?: string }) => {
+    // NOTE: backend expects a single shopId per order
+    const shopId = order.shopId || order.items?.[0]?.shopId;
+    return await backendPost<any>('/api/v1/orders', {
+      shopId,
       items: order.items,
+      total: order.total,
       paymentMethod: order.paymentMethod,
-      createdAt: new Date().toISOString(),
-    };
-    return mockDb.addSale(sale);
+    });
   },
 
   // Shop analytics / gallery
-  getShopAnalytics: mockDb.getShopAnalytics.bind(mockDb),
+  getShopAnalytics: async (shopId: string, opts?: { from?: string; to?: string }) => {
+    try {
+      const params = new URLSearchParams();
+      if (opts?.from) params.set('from', String(opts.from));
+      if (opts?.to) params.set('to', String(opts.to));
+      const qs = params.toString();
+      return await backendGet<any>(`/api/v1/shops/${encodeURIComponent(shopId)}/analytics${qs ? `?${qs}` : ''}`);
+    } catch (e) {
+      return {};
+    }
+  },
   getShopGallery: async (shopId: string) => {
     const images = await backendGet<any[]>(`/api/v1/gallery/${shopId}`);
     return (images || []).map((img: any) => ({
@@ -826,5 +1175,48 @@ export const ApiService = {
   saveFeedback: async (feedbackData: any) => {
     // Mock save feedback
     return { error: null };
+  },
+
+  // Customer Management
+  getShopCustomers: async (shopId: string) => {
+    try {
+      const customers = await backendGet<any[]>(`/api/v1/customers/shop/${shopId}`);
+      return customers.map((c: any) => ({
+        ...c,
+        totalSpent: c.totalSpent || 0,
+        orders: c.orders || 0,
+        status: c.status || 'active'
+      }));
+    } catch (e) {
+      // Fallback to mock data
+      return mockDb.getShopCustomers(shopId);
+    }
+  },
+
+  convertReservationToCustomer: async (customerData: any) => {
+    try {
+      return await backendPost('/api/v1/customers/convert', customerData);
+    } catch (e) {
+      // Mock conversion
+      return mockDb.convertReservationToCustomer(customerData);
+    }
+  },
+
+  updateCustomerStatus: async (customerId: string, status: string) => {
+    try {
+      return await backendPut(`/api/v1/customers/${customerId}/status`, { status });
+    } catch (e) {
+      // Mock update
+      return mockDb.updateCustomerStatus(customerId, status);
+    }
+  },
+
+  sendCustomerPromotion: async (customerId: string, shopId: string) => {
+    try {
+      return await backendPost('/api/v1/customers/send-promotion', { customerId, shopId });
+    } catch (e) {
+      // Mock promotion send
+      return { success: true, message: 'Promotion sent successfully' };
+    }
   }
 };

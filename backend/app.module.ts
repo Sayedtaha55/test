@@ -6,6 +6,9 @@ import { AuthModule } from './auth/auth.module';
 import { ShopModule } from './shop.module';
 import { ProductModule } from './product.module';
 import { GalleryModule } from './gallery.module';
+import { ReservationModule } from './reservation.module';
+import { OrderModule } from './order.module';
+import { OfferModule } from './offer.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { TestController } from './test.controller';
 import { HealthController } from './health.controller';
@@ -22,6 +25,9 @@ import { DatabaseTestController } from './db-test.controller';
     ShopModule,
     ProductModule,
     GalleryModule,
+    ReservationModule,
+    OrderModule,
+    OfferModule,
     MonitoringModule,
   ],
   controllers: [TestController, HealthController, DatabaseTestController],

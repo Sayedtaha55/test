@@ -191,6 +191,15 @@ const ProductPage: React.FC = () => {
                   <CalendarCheck size={28} /> حجز العرض
                 </button>
              </div>
+
+             {shop && (
+               <button
+                 onClick={() => navigate(`/shop/${shop.slug}?chat=1`)}
+                 className="w-full py-5 bg-slate-50 text-slate-900 rounded-[2.5rem] font-black text-xl hover:bg-slate-100 transition-all flex items-center justify-center gap-3 border border-slate-100"
+               >
+                 <Store size={22} /> محادثة المتجر
+               </button>
+             )}
           </div>
 
           <div className="grid grid-cols-2 gap-6 pt-12 border-t border-slate-100">

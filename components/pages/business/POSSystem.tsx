@@ -67,28 +67,21 @@ const POSSystem: React.FC<{ onClose: () => void; shopId: string }> = ({ onClose,
     if (cart.length === 0) return;
     setIsProcessing(true);
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const sale = {
-      id: Math.random().toString(36).substr(2, 6),
-      items: cart,
-      total: subtotal * 1.14,
-      type: orderType,
-      createdAt: Date.now()
-    };
+    const totalWithVat = subtotal * 1.14;
 
     setTimeout(() => {
       (async () => {
         try {
-          await Promise.all(
-            cart.map(async (item) => {
-              const current = products.find((p) => p.id === item.id);
-              const currentStock = typeof current?.stock === 'number' ? current.stock : Number(current?.stock || 0);
-              const nextStock = Math.max(0, currentStock - item.quantity);
-              await ApiService.updateProductStock(item.id, nextStock);
-            })
-          );
+          await ApiService.placeOrder({
+            shopId,
+            items: cart.map((i) => ({ id: i.id, quantity: i.quantity })),
+            total: totalWithVat,
+            paymentMethod: orderType,
+          });
 
           const updated = await ApiService.getProducts(shopId);
           setProducts(updated || []);
+          window.dispatchEvent(new Event('orders-updated'));
         } catch {
           // Stock sync errors are ignored
         } finally {

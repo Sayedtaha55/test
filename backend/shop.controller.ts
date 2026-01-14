@@ -146,11 +146,17 @@ export class ShopController {
 
   @Get(':id/analytics')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('merchant')
-  async getAnalytics(@Param('id') id: string, @Request() req) {
-    if (req.user.shopId !== id) {
+  @Roles('merchant', 'admin')
+  async getAnalytics(@Param('id') id: string, @Query('from') from: string, @Query('to') to: string, @Request() req) {
+    const role = String(req.user?.role || '').toUpperCase();
+    if (role !== 'ADMIN' && req.user.shopId !== id) {
       throw new ForbiddenException('صلاحيات غير كافية');
     }
-    return this.shopService.getShopAnalytics(id);
+    const fromDate = from ? new Date(String(from)) : undefined;
+    const toDate = to ? new Date(String(to)) : undefined;
+    return this.shopService.getShopAnalytics(id, {
+      from: fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : undefined,
+      to: toDate && !Number.isNaN(toDate.getTime()) ? toDate : undefined,
+    });
   }
 }

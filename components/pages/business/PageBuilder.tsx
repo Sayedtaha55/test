@@ -92,7 +92,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const generateAIBanner = async () => {
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const prompt = `A cinematic ultra-wide 16:9 banner shot of a ${aiPrompt} interior, ultra-modern hyper-realistic architectural design, minimalist luxury aesthetic, professional 8k photography, soft atmospheric lighting, no text, clean background.`;
       
       const response = await ai.models.generateContent({

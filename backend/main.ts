@@ -9,7 +9,24 @@ import express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    cors: true,
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        try {
+          const url = new URL(origin);
+          if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+            return callback(null, true);
+          }
+        } catch {
+          // ignore
+        }
+        return callback(null, false);
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+      optionsSuccessStatus: 204,
+    },
   });
 
   app.use(bodyParser.json({ limit: '10mb' }));

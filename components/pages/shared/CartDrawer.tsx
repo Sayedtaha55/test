@@ -59,13 +59,19 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, items, onRemov
     setError('');
     
     try {
-      await ApiService.placeOrder({
-        items: localItems,
-        total,
-        paymentMethod: 'card'
-      });
+      for (const [shopId, shop] of Object.entries(groupedItems)) {
+        const items = (shop as any)?.items || [];
+        const shopTotal = items.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
+        await ApiService.placeOrder({
+          shopId,
+          items,
+          total: shopTotal,
+          paymentMethod: 'card'
+        });
+      }
       setIsProcessing(false);
       setShowSuccess(true);
+      window.dispatchEvent(new Event('orders-updated'));
       setTimeout(() => {
         setShowSuccess(false);
         onClose();

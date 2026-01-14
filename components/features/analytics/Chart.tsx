@@ -39,7 +39,7 @@ const Chart: React.FC<ChartProps> = ({
     <Card className="p-6">
       <h3 className="text-xl font-black text-white mb-6">{title}</h3>
       
-      <ResponsiveContainer width="100%" height={height}>
+      <ResponsiveContainer width="100%" height={height} minWidth={200} minHeight={200}>
         {type === 'line' ? (
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />

@@ -14,7 +14,7 @@ import ReservationModal from '../shared/ReservationModal';
 import { ShopGallery as ShopGalleryComponent, useToast } from '@/components';
 import { ApiService } from '@/services/api.service';
 
-const { useParams, useNavigate } = ReactRouterDOM as any;
+const { useParams, useNavigate, useLocation } = ReactRouterDOM as any;
 const MotionImg = motion.img as any;
 const MotionDiv = motion.div as any;
 
@@ -144,7 +144,7 @@ const ChatWindow: React.FC<{ shop: Shop, onClose: () => void }> = ({ shop, onClo
       loadMessages(parsed.id);
       
       const sub = ApiService.subscribeToMessages(shop.id, (newMsg) => {
-        if (newMsg.sender_id === parsed.id || newMsg.role === 'merchant') {
+        if (newMsg.userId === parsed.id) {
           setMessages(prev => [...prev, newMsg]);
         }
       });
@@ -165,6 +165,7 @@ const ChatWindow: React.FC<{ shop: Shop, onClose: () => void }> = ({ shop, onClo
     if (!inputText.trim() || !user) return;
     const msg = {
       shopId: shop.id,
+      userId: user.id,
       senderId: user.id,
       senderName: user.name,
       text: inputText,
@@ -191,7 +192,7 @@ const ChatWindow: React.FC<{ shop: Shop, onClose: () => void }> = ({ shop, onClo
           <img src={shop.logoUrl || (shop as any).logo_url} className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-white/20" />
           <div className="text-right">
             <p className="font-black text-xs md:text-sm leading-none mb-1">{shop.name}</p>
-            <p className="text-[9px] md:text-[10px] text-green-400 font-bold flex items-center gap-1 justify-end">متصل الآن <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-green-400 rounded-full" /></p>
+            <p className="text-[9px] md:text-[10px] text-green-400 font-bold flex items-center gap-1 justify-end">متصل الآن <span className="w-1 h-1 md:w-1.5 md:h-1.5 bg-green-400 rounded-full inline-block" /></p>
           </div>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X size={18} /></button>
@@ -246,7 +247,14 @@ const ShopProfile: React.FC = () => {
   const [hasFollowed, setHasFollowed] = useState(false);
   const [selectedProductForRes, setSelectedProductForRes] = useState<any | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { addToast } = useToast();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shouldOpenChat = params.get('chat') === '1' || params.get('chat') === 'true';
+    if (shouldOpenChat) setShowChat(true);
+  }, [location.search]);
 
   useEffect(() => {
     const syncData = async () => {
@@ -278,6 +286,10 @@ const ShopProfile: React.FC = () => {
     };
     syncData();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.addEventListener('ray-db-update', syncData);
+    return () => {
+      window.removeEventListener('ray-db-update', syncData);
+    };
   }, [slug]);
 
   const handleShare = async () => {

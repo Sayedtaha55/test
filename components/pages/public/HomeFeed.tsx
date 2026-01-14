@@ -101,49 +101,6 @@ const HomeFeed: React.FC = () => {
          </p>
       </div>
 
-      <section className="mb-12 md:mb-24">
-        {offers.length > 0 && (
-          <MotionDiv 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="relative group h-[450px] md:h-[700px] rounded-[2.5rem] md:rounded-[4rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.15)] bg-[#1A1A1A]"
-          >
-            <img src={offers[0].imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-[4s]" alt="hero" />
-            <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-l from-black via-black/40 to-transparent" />
-            
-            <div className="absolute bottom-8 right-6 left-6 md:bottom-20 md:right-20 md:left-auto md:max-w-2xl text-right">
-                <div className="flex items-center gap-3 justify-end mb-6">
-                  <img src={offers[0].shopLogo} className="w-8 h-8 rounded-xl border border-white/20" />
-                  <span className="text-white/80 font-black text-xs md:text-sm uppercase tracking-[0.2em]">{offers[0].shopName}</span>
-                </div>
-                <h2 className="text-4xl md:text-[7rem] font-black text-white tracking-tighter leading-[0.8] mb-8">
-                  خصم {offers[0].discount}% <br className="hidden md:block" /> <span className="text-[#00E5FF]">{offers[0].title}</span>
-                </h2>
-                <div className="flex flex-col md:flex-row items-end md:items-center gap-6 md:gap-12 flex-row-reverse">
-                  <div className="flex gap-4 w-full md:w-auto">
-                    <button 
-                      onClick={() => setSelectedItem(offers[0])}
-                      className="flex-1 md:w-auto bg-[#00E5FF] text-black px-10 md:px-16 py-5 md:py-6 rounded-[2rem] font-black text-xl md:text-2xl hover:scale-105 transition-all shadow-xl flex items-center justify-center gap-4"
-                    >
-                      <CalendarCheck size={28} /> حجز
-                    </button>
-                    <button 
-                      onClick={() => navigate(`/product/${offers[0].id}`)}
-                      className="p-5 md:p-6 bg-white rounded-[2rem] text-slate-900 shadow-xl hover:bg-slate-50 transition-all flex items-center justify-center"
-                    >
-                      <Eye size={28} />
-                    </button>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-white/40 line-through text-xs md:text-xl font-bold mb-1">ج.م {offers[0].oldPrice}</p>
-                    <p className="text-white text-3xl md:text-6xl font-black tracking-tighter">ج.م {offers[0].newPrice}</p>
-                  </div>
-                </div>
-            </div>
-          </MotionDiv>
-        )}
-      </section>
-
       {/* Offers Grid */}
       <section className="mb-24">
         <div className="flex items-center justify-between mb-12 md:mb-20 flex-row-reverse px-2">
@@ -155,13 +112,13 @@ const HomeFeed: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
           {offers.length === 0 ? (
             <div className="col-span-full py-20 text-center text-slate-300 font-bold">لا توجد عروض نشطة حالياً.</div>
-          ) : offers.slice(1).map((offer) => (
+          ) : offers.map((offer) => (
             <MotionDiv 
               key={offer.id}
               className="group bg-white p-5 rounded-[3rem] border border-slate-50 hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.08)] transition-all duration-500"
             >
               <div 
-                onClick={() => navigate(`/product/${offer.id}`)}
+                onClick={() => navigate(`/product/${(offer as any).productId || offer.id}`)}
                 className="relative aspect-[4/5] rounded-[2.5rem] overflow-hidden mb-6 bg-slate-50 cursor-pointer"
               >
                 <img src={offer.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[2s]" />
