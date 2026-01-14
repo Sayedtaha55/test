@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ShopGallery } from '@/types';
 import { useToast } from '@/components';
+import { ApiService } from '@/services/api.service';
 
 interface GalleryManagerProps {
   shopId: string;
@@ -36,23 +37,42 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.type.startsWith('image/')) {
-        // Create a temporary URL for preview (in production, upload to cloud storage)
-        const imageUrl = URL.createObjectURL(file);
-        
-        const newImage: ShopGallery = {
-          id: `temp_${Date.now()}_${i}`,
-          shopId,
-          imageUrl,
-          caption: '',
-          createdAt: Date.now()
-        };
-        
-        newImages.push(newImage);
+        try {
+          // Upload to backend
+          const result = await ApiService.addShopGalleryImage(shopId, {
+            file,
+            caption: ''
+          });
+          
+          if (!result.error) {
+            // Create temporary preview URL
+            const imageUrl = URL.createObjectURL(file);
+            
+            const newImage: ShopGallery = {
+              id: result.id || `temp_${Date.now()}_${i}`,
+              shopId,
+              imageUrl: result.imageUrl || imageUrl,
+              caption: result.caption || '',
+              createdAt: result.createdAt || Date.now()
+            };
+            
+            newImages.push(newImage);
+          }
+        } catch (error) {
+          console.error('Upload failed:', error);
+          addToast('فشل رفع الصورة', 'error');
+        }
       }
     }
 
     if (newImages.length > 0) {
-      onImagesChange([...images, ...newImages]);
+      // Refresh gallery from backend
+      setTimeout(() => {
+        ApiService.getShopGallery(shopId).then(images => {
+          onImagesChange(images || []);
+        });
+      }, 1000);
+      
       addToast(`تم إضافة ${newImages.length} صور بنجاح`, 'success');
     } else {
       addToast('يرجى اختيار ملفات صور فقط', 'error');
@@ -81,12 +101,22 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
     }
   };
 
-  const handleDeleteImage = (imageId: string) => {
+  const handleDeleteImage = async (imageId: string) => {
     if (!confirm('هل أنت متأكد من حذف هذه الصورة؟')) return;
     
-    const updatedImages = images.filter(img => img.id !== imageId);
-    onImagesChange(updatedImages);
-    addToast('تم حذف الصورة', 'success');
+    try {
+      await ApiService.deleteShopGalleryImage(imageId);
+      addToast('تم حذف الصورة', 'success');
+      
+      // Refresh gallery from backend
+      setTimeout(() => {
+        ApiService.getShopGallery(shopId).then(images => {
+          onImagesChange(images || []);
+        });
+      }, 500);
+    } catch (error) {
+      addToast('فشل حذف الصورة', 'error');
+    }
   };
 
   const handleSaveCaption = (imageId: string) => {
@@ -210,7 +240,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
               الصور المضافة ({images.length})
             </h4>
             <div className="text-sm text-slate-500">
-              الحد الأقصى: 20 صورة
+              الحد الأقصى: 200 صورة
             </div>
           </div>
 
@@ -224,7 +254,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
               >
                 <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
                   <img 
-                    src={image.imageUrl} 
+                    src={image.thumbUrl || image.imageUrl} 
                     alt={`صورة ${index + 1}`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
@@ -301,7 +331,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
           </div>
 
           {/* Add More Button */}
-          {images.length < 20 && (
+          {images.length < 200 && (
             <button
               onClick={() => fileInputRef.current?.click()}
               className="mt-6 w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl hover:border-[#00E5FF] hover:bg-[#00E5FF]/5 transition-all flex items-center justify-center gap-3"

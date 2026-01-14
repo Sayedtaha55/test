@@ -1,10 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, MapPin, UtensilsCrossed, ChevronLeft, Star } from 'lucide-react';
-import { MOCK_SHOPS } from '@/constants';
 import { Category } from '@/types';
 import { motion } from 'framer-motion';
 import * as ReactRouterDOM from 'react-router-dom';
+import { ApiService } from '@/services/api.service';
 
 const { Link } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
@@ -12,12 +12,37 @@ const MotionDiv = motion.div as any;
 const RestaurantsPage: React.FC = () => {
   const [governorate, setGovernorate] = useState('الكل');
   const [search, setSearch] = useState('');
+  const [shops, setShops] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const restaurants = MOCK_SHOPS.filter(s => 
-    s.category === Category.RESTAURANT && 
-    (governorate === 'الكل' || s.governorate === governorate) &&
-    (s.name.toLowerCase().includes(search.toLowerCase()))
-  );
+  useEffect(() => {
+    let mounted = true;
+    ApiService.getShops('approved')
+      .then((data: any[]) => {
+        if (!mounted) return;
+        setShops(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setShops([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const restaurants = shops
+    .filter((s) => String(s?.status || '').toLowerCase() === 'approved')
+    .filter(
+      (s) =>
+        s.category === Category.RESTAURANT &&
+        (governorate === 'الكل' || s.governorate === governorate) &&
+        String(s?.name || '').toLowerCase().includes(search.toLowerCase()),
+    );
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-12 text-right" dir="rtl">
@@ -51,7 +76,12 @@ const RestaurantsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-        {restaurants.map((shop, idx) => (
+        {loading ? (
+          <div className="text-slate-400 font-bold">جاري التحميل...</div>
+        ) : restaurants.length === 0 ? (
+          <div className="text-slate-400 font-bold">لا توجد مطاعم حالياً</div>
+        ) : (
+          restaurants.map((shop, idx) => (
           <MotionDiv 
             key={shop.id}
             initial={{ opacity: 0, y: 20 }}
@@ -59,7 +89,7 @@ const RestaurantsPage: React.FC = () => {
             transition={{ delay: idx * 0.1 }}
             className="group relative h-[400px] rounded-[3.5rem] overflow-hidden shadow-xl"
           >
-            <img src={shop.pageDesign.bannerUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3s]" alt={shop.name} />
+            <img src={shop?.pageDesign?.bannerUrl || shop?.bannerUrl || shop?.banner_url || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200'} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3s]" alt={shop.name} />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
             
             <div className="absolute top-8 left-8">
@@ -72,7 +102,7 @@ const RestaurantsPage: React.FC = () => {
             <div className="absolute bottom-10 right-10 left-10 flex items-end justify-between flex-row-reverse">
               <div className="text-right">
                 <div className="flex items-center gap-3 justify-end mb-2">
-                   <img src={shop.logoUrl} className="w-10 h-10 rounded-xl border border-white/20" />
+                   <img src={shop.logoUrl || shop.logo_url || 'https://images.unsplash.com/photo-1544441893-675973e31985?w=200'} className="w-10 h-10 rounded-xl border border-white/20" />
                    <h3 className="text-3xl font-black text-white">{shop.name}</h3>
                 </div>
                 <p className="text-white/60 font-bold text-lg flex items-center gap-2 justify-end">
@@ -87,7 +117,8 @@ const RestaurantsPage: React.FC = () => {
               </Link>
             </div>
           </MotionDiv>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

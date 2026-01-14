@@ -60,6 +60,7 @@
     "react-router-dom": "^7.0.0",
     "recharts": "^3.6.0",
     "prisma": "^6.19.1",
+    "sharp": "^0.33.5",
     "tsx": "^4.20.0",
     "winston": "^3.19.0"
   },

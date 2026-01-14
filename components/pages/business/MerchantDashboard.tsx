@@ -41,6 +41,26 @@ const MerchantDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
 
+  const setTab = (tab: TabType) => {
+    const next = new URLSearchParams(searchParams);
+    if (!tab || tab === 'overview') {
+      next.delete('tab');
+    } else {
+      next.set('tab', tab);
+    }
+    setSearchParams(next as any, { replace: true } as any);
+  };
+
+  const savedUserForView = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('ray_user') || '{}');
+    } catch {
+      return {};
+    }
+  })();
+  const isAdminView = String(savedUserForView?.role || '').toLowerCase() === 'admin';
+  const adminTargetShopId = isAdminView && impersonateShopId ? impersonateShopId : undefined;
+
   const syncData = async () => {
     const savedUserStr = localStorage.getItem('ray_user');
     if (!savedUserStr) {
@@ -48,11 +68,18 @@ const MerchantDashboard: React.FC = () => {
       return;
     }
     const savedUser = JSON.parse(savedUserStr);
+    const role = String(savedUser?.role || '').toLowerCase();
+    if (role !== 'merchant' && !(role === 'admin' && impersonateShopId)) {
+      addToast('هذه الصفحة للتجار فقط', 'error');
+      navigate('/login');
+      return;
+    }
     const effectiveShopId = (savedUser?.role === 'admin' && impersonateShopId) ? impersonateShopId : savedUser.shopId;
     
     try {
-      const shops = await ApiService.getShops('');
-      const myShop = shops.find((s: any) => s.id === effectiveShopId) || shops[0];
+      const myShop = (savedUser?.role === 'admin' && impersonateShopId)
+        ? await ApiService.getShopAdminById(effectiveShopId)
+        : await ApiService.getMyShop();
       setCurrentShop(myShop);
       
       const [prodData, resData, salesData, notifData, analyticsData, allOffers, galleryData] = await Promise.all([
@@ -66,8 +93,8 @@ const MerchantDashboard: React.FC = () => {
       ]);
 
       setProducts(prodData);
-      setReservations(resData.filter((r: any) => r.shop_id === myShop.id));
-      setSales(salesData.filter((s: any) => s.shop_id === myShop.id));
+      setReservations(resData.filter((r: any) => r.shop_id === myShop.id || r.shopId === myShop.id));
+      setSales(salesData.filter((s: any) => s.shop_id === myShop.id || s.shopId === myShop.id));
       setNotifications(notifData.slice(0, 5));
       setAnalytics(analyticsData);
       setActiveOffers(allOffers.filter((o: any) => o.shopId === myShop.id));
@@ -116,7 +143,7 @@ const MerchantDashboard: React.FC = () => {
       case 'growth': return <GrowthTab shop={currentShop} analytics={analytics} products={products} />;
       case 'reports': return <ReportsTab analytics={analytics} sales={sales} />;
       case 'customers': return <CustomersTab shopId={currentShop.id} />;
-      case 'settings': return <SettingsTab shop={currentShop} />;
+      case 'settings': return <SettingsTab shop={currentShop} onSaved={syncData} adminShopId={adminTargetShopId} />;
       default: return <OverviewTab shop={currentShop} analytics={analytics} notifications={notifications} />;
     }
   };
@@ -134,7 +161,7 @@ const MerchantDashboard: React.FC = () => {
       <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-8">
         <div className="flex items-center gap-8 flex-row-reverse">
           <div className="relative group">
-             <img src={currentShop.logo_url} className="w-20 h-20 md:w-32 md:h-32 rounded-[2.5rem] object-cover shadow-2xl transition-transform group-hover:scale-105" alt="logo" />
+             <img src={currentShop.logoUrl || currentShop.logo_url || 'https://images.unsplash.com/photo-1544441893-675973e31985?w=200'} className="w-20 h-20 md:w-32 md:h-32 rounded-[2.5rem] object-cover shadow-2xl transition-transform group-hover:scale-105" alt="logo" />
              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-green-500 rounded-2xl border-4 border-white flex items-center justify-center text-white shadow-lg">
                 <CheckCircle2 size={20} />
              </div>
@@ -148,30 +175,29 @@ const MerchantDashboard: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-3">
-           <button onClick={() => setSearchParams({ tab: 'pos' })} className="flex-1 md:flex-none px-10 py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm flex items-center justify-center gap-3 hover:bg-black transition-all shadow-xl"><Smartphone size={20} /> الكاشير الذكي</button>
-           <button onClick={() => setSearchParams({ tab: 'builder' })} className="flex-1 md:flex-none px-10 py-5 bg-white border border-slate-200 text-slate-900 rounded-[2rem] font-black text-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-all"><Palette size={20} /> هوية المتجر</button>
+           <button onClick={() => setTab('pos')} className="flex-1 md:flex-none px-10 py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm flex items-center justify-center gap-3 hover:bg-black transition-all shadow-xl"><Smartphone size={20} /> الكاشير الذكي</button>
         </div>
       </div>
 
       {/* Enhanced Navigation */}
-      <div className="flex gap-2 p-2 bg-slate-100/60 backdrop-blur-xl rounded-[2.5rem] border border-white/40 overflow-x-auto no-scrollbar sticky top-24 z-40 shadow-inner">
-        <TabButton active={activeTab === 'overview'} onClick={() => setSearchParams({ tab: 'overview' })} icon={<TrendingUp size={18} />} label="نظرة عامة" />
-        <TabButton active={activeTab === 'gallery'} onClick={() => setSearchParams({ tab: 'gallery' })} icon={<Camera size={18} />} label="معرض الصور" />
-        <TabButton active={activeTab === 'reports'} onClick={() => setSearchParams({ tab: 'reports' })} icon={<BarChart3 size={18} />} label="التقارير" />
-        <TabButton active={activeTab === 'customers'} onClick={() => setSearchParams({ tab: 'customers' })} icon={<Users size={18} />} label="العملاء" />
-        <TabButton active={activeTab === 'products'} onClick={() => setSearchParams({ tab: 'products' })} icon={<Package size={18} />} label="المخزون" />
-        <TabButton active={activeTab === 'promotions'} onClick={() => setSearchParams({ tab: 'promotions' })} icon={<Megaphone size={18} />} label="العروض" />
-        <TabButton active={activeTab === 'reservations'} onClick={() => setSearchParams({ tab: 'reservations' })} icon={<CalendarCheck size={18} />} label="الحجوزات" />
-        <TabButton active={activeTab === 'chats'} onClick={() => setSearchParams({ tab: 'chats' })} icon={<MessageCircle size={18} />} label="المحادثات" />
-        <TabButton active={activeTab === 'sales'} onClick={() => setSearchParams({ tab: 'sales' })} icon={<CreditCard size={18} />} label="المبيعات" />
-        <TabButton active={activeTab === 'growth'} onClick={() => setSearchParams({ tab: 'growth' })} icon={<Sparkles size={18} />} label="نمو AI" />
-        <TabButton active={activeTab === 'settings'} onClick={() => setSearchParams({ tab: 'settings' })} icon={<Settings size={18} />} label="الإعدادات" />
+      <div className="hidden gap-2 p-2 bg-slate-100/60 backdrop-blur-xl rounded-[2.5rem] border border-white/40 overflow-x-auto no-scrollbar sticky top-24 z-40 shadow-inner">
+        <TabButton active={activeTab === 'overview'} onClick={() => setTab('overview')} icon={<TrendingUp size={18} />} label="نظرة عامة" />
+        <TabButton active={activeTab === 'gallery'} onClick={() => setTab('gallery')} icon={<Camera size={18} />} label="معرض الصور" />
+        <TabButton active={activeTab === 'reports'} onClick={() => setTab('reports')} icon={<BarChart3 size={18} />} label="التقارير" />
+        <TabButton active={activeTab === 'customers'} onClick={() => setTab('customers')} icon={<Users size={18} />} label="العملاء" />
+        <TabButton active={activeTab === 'products'} onClick={() => setTab('products')} icon={<Package size={18} />} label="المخزون" />
+        <TabButton active={activeTab === 'promotions'} onClick={() => setTab('promotions')} icon={<Megaphone size={18} />} label="العروض" />
+        <TabButton active={activeTab === 'reservations'} onClick={() => setTab('reservations')} icon={<CalendarCheck size={18} />} label="الحجوزات" />
+        <TabButton active={activeTab === 'chats'} onClick={() => setTab('chats')} icon={<MessageCircle size={18} />} label="المحادثات" />
+        <TabButton active={activeTab === 'sales'} onClick={() => setTab('sales')} icon={<CreditCard size={18} />} label="المبيعات" />
+        <TabButton active={activeTab === 'growth'} onClick={() => setTab('growth')} icon={<Sparkles size={18} />} label="نمو AI" />
+        <TabButton active={activeTab === 'settings'} onClick={() => setTab('settings')} icon={<Settings size={18} />} label="الإعدادات" />
       </div>
 
       <AnimatePresence mode="wait">
         <MotionDiv key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-          {activeTab === 'pos' ? <POSSystem onClose={() => setSearchParams({ tab: 'overview' })} /> : 
-           activeTab === 'builder' ? <PageBuilder onClose={() => setSearchParams({ tab: 'overview' })} /> : 
+          {activeTab === 'pos' ? <POSSystem shopId={currentShop.id} onClose={() => setTab('overview')} /> : 
+           activeTab === 'builder' ? <PageBuilder onClose={() => setTab('overview')} /> : 
            renderContent()}
         </MotionDiv>
       </AnimatePresence>
@@ -237,12 +263,7 @@ const ReportSummaryCard = ({ label, value, growth }: any) => (
 // --- New: Customers Tab ---
 const CustomersTab: React.FC<{ shopId: string }> = ({ shopId }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [customers, setCustomers] = useState([
-    { id: 'c1', name: 'أحمد محمود', email: 'ahmed@test.com', totalSpent: 1200, status: 'active', orders: 4 },
-    { id: 'c2', name: 'سارة علي', email: 'sara@test.com', totalSpent: 2500, status: 'active', orders: 7 },
-    { id: 'c3', name: 'ياسين كمال', email: 'yassin@test.com', totalSpent: 0, status: 'blocked', orders: 0 },
-    { id: 'c4', name: 'مي حسن', email: 'mai@test.com', totalSpent: 850, status: 'active', orders: 2 },
-  ]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const { addToast } = useToast();
 
   const toggleStatus = (id: string) => {
@@ -284,7 +305,11 @@ const CustomersTab: React.FC<{ shopId: string }> = ({ shopId }) => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(c => (
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-10 text-center text-slate-300 font-bold">لا توجد بيانات عملاء حالياً</td>
+              </tr>
+            ) : filtered.map(c => (
               <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
                 <td className="p-6">
                    <div className="flex items-center gap-4 flex-row-reverse">
@@ -560,15 +585,24 @@ const TabButton = ({ active, onClick, icon, label }: any) => (
   </button>
 );
 
-const StatCard = ({ label, value, icon, color }: any) => (
+const StatCard = ({ label, value, icon, color }: any) => {
+  const normalizedValue = (() => {
+    if (value === undefined || value === null) return 0;
+    if (typeof value === 'number' && Number.isNaN(value)) return 0;
+    if (typeof value === 'string') return value.replace(/\b(undefined|null)\b/g, '0');
+    return value;
+  })();
+
+  return (
   <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm text-right flex flex-col items-end group hover:shadow-xl transition-all">
     <div className={`w-16 h-16 rounded-3xl flex items-center justify-center text-2xl mb-8 group-hover:rotate-6 transition-transform ${color === 'cyan' ? 'bg-cyan-50 text-[#00E5FF]' : 'bg-slate-50 text-slate-400'}`}>
       {icon}
     </div>
     <span className="text-slate-400 font-black text-xs uppercase tracking-widest mb-2">{label}</span>
-    <span className="text-4xl font-black tracking-tighter text-slate-900">{value}</span>
+    <span className="text-4xl font-black tracking-tighter text-slate-900">{normalizedValue}</span>
   </div>
-);
+  );
+};
 
 const ProductsTab: React.FC<{products: Product[], onAdd: () => void, onMakeOffer: (p: Product) => void, onDelete: (id: string) => void}> = ({products, onAdd, onMakeOffer, onDelete}) => (
   <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-sm">
@@ -649,13 +683,19 @@ const GrowthTab: React.FC<{shop: any, analytics: any, products: Product[]}> = ({
   );
 };
 
-const OverviewTab: React.FC<{shop: any, analytics: any, notifications: any[]}> = ({shop, analytics, notifications}) => (
+const OverviewTab: React.FC<{shop: any, analytics: any, notifications: any[]}> = ({shop, analytics, notifications}) => {
+  const safeAnalytics = analytics || {};
+  const salesCountToday = safeAnalytics.salesCountToday ?? 0;
+  const revenueToday = safeAnalytics.revenueToday ?? 0;
+  const chartData = Array.isArray(safeAnalytics.chartData) ? safeAnalytics.chartData : [];
+
+  return (
   <div className="space-y-12">
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 md:gap-10">
       <StatCard label="المتابعين" value={shop.followers?.toLocaleString() || '0'} icon={<Users size={32} />} color="cyan" />
       <StatCard label="زيارات المتجر" value={shop.visitors?.toLocaleString() || '0'} icon={<Eye size={32} />} color="cyan" />
-      <StatCard label="مبيعات اليوم" value={`${analytics.salesCountToday}`} icon={<ShoppingCart size={32} />} color="slate" />
-      <StatCard label="إيرادات اليوم" value={`ج.م ${analytics.revenueToday}`} icon={<DollarSign size={32} />} color="cyan" />
+      <StatCard label="مبيعات اليوم" value={`${salesCountToday}`} icon={<ShoppingCart size={32} />} color="slate" />
+      <StatCard label="إيرادات اليوم" value={`ج.م ${revenueToday}`} icon={<DollarSign size={32} />} color="cyan" />
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
@@ -666,7 +706,7 @@ const OverviewTab: React.FC<{shop: any, analytics: any, notifications: any[]}> =
           </div>
           <div className="h-[450px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={analytics.chartData}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#00E5FF" stopOpacity={0.4}/>
@@ -702,7 +742,8 @@ const OverviewTab: React.FC<{shop: any, analytics: any, notifications: any[]}> =
        </div>
     </div>
   </div>
-);
+  );
+};
 
 const ActivityItem: React.FC<{n: any}> = ({n}) => (
   <div className="flex items-center gap-6 flex-row-reverse group cursor-pointer">
@@ -722,35 +763,213 @@ const ActivityItem: React.FC<{n: any}> = ({n}) => (
   </div>
 );
 
-const SettingsTab: React.FC<{shop: any}> = ({shop}) => (
-  <div className="bg-white p-12 md:p-16 rounded-[3.5rem] border border-slate-100 shadow-sm">
-     <h3 className="text-3xl font-black mb-12">إعدادات المتجر العامة</h3>
-     <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        <div className="space-y-3">
-           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">الاسم التجاري الرسمي</label>
-           <input className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none focus:ring-2 focus:ring-[#00E5FF]/20 focus:bg-white transition-all" defaultValue={shop.name} />
-        </div>
-        <div className="space-y-3">
-           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">العنوان / المدينة</label>
-           <input className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none focus:ring-2 focus:ring-[#00E5FF]/20 focus:bg-white transition-all" defaultValue={shop.city} />
-        </div>
-        <div className="space-y-3">
-           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">نوع المتجر</label>
-           <select className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none appearance-none" defaultValue={shop.category}>
-              <option value="RETAIL">محل تجاري</option>
-              <option value="RESTAURANT">مطعم / كافيه</option>
-           </select>
-        </div>
-        <div className="space-y-3">
-           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">رقم الواتساب للتواصل</label>
-           <input className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" placeholder="01x xxxx xxxx" />
-        </div>
-     </div>
-     <div className="mt-12 flex justify-end">
-        <button className="px-16 py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-black transition-all shadow-2xl">حفظ كافة التغييرات السيادية</button>
-     </div>
-  </div>
-);
+const SettingsTab: React.FC<{shop: any, onSaved: () => void, adminShopId?: string}> = ({shop, onSaved, adminShopId}) => {
+  const { addToast } = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  const [name, setName] = useState(shop?.name || '');
+  const [governorate, setGovernorate] = useState(shop?.governorate || '');
+  const [city, setCity] = useState(shop?.city || '');
+  const [category, setCategory] = useState(shop?.category || 'RETAIL');
+  const [phone, setPhone] = useState(shop?.phone || '');
+  const [email, setEmail] = useState(shop?.email || '');
+  const [whatsapp, setWhatsapp] = useState(shop?.layoutConfig?.whatsapp || '');
+  const [customDomain, setCustomDomain] = useState(shop?.layoutConfig?.customDomain || '');
+  const [logoUrl, setLogoUrl] = useState(shop?.logoUrl || shop?.logo_url || '');
+  const [bannerUrl, setBannerUrl] = useState(shop?.bannerUrl || shop?.banner_url || '');
+  const [openingHours, setOpeningHours] = useState(shop?.openingHours || shop?.opening_hours || '');
+  const [addressDetailed, setAddressDetailed] = useState(shop?.addressDetailed || shop?.address_detailed || '');
+  const [description, setDescription] = useState(shop?.description || '');
+
+  const handlePickImage = (kind: 'logo' | 'banner') => {
+    if (kind === 'logo') {
+      logoInputRef.current?.click();
+      return;
+    }
+    bannerInputRef.current?.click();
+  };
+
+  const handleImageChange = (kind: 'logo' | 'banner', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      addToast('الصورة كبيرة جداً، يرجى اختيار صورة أقل من 2 ميجابايت', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      if (kind === 'logo') setLogoUrl(dataUrl);
+      else setBannerUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await ApiService.updateMyShop({
+        ...(adminShopId ? { shopId: adminShopId } : {}),
+        name,
+        governorate,
+        city,
+        category,
+        phone,
+        email,
+        whatsapp,
+        customDomain,
+        logoUrl,
+        bannerUrl,
+        openingHours,
+        addressDetailed,
+        description,
+      });
+      addToast('تم حفظ إعدادات المتجر', 'success');
+      onSaved();
+    } catch (e) {
+      const message = (e as any)?.message ? String((e as any).message) : '';
+      addToast(message ? `فشل حفظ الإعدادات: ${message}` : 'فشل حفظ الإعدادات', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-12 md:p-16 rounded-[3.5rem] border border-slate-100 shadow-sm">
+       <h3 className="text-3xl font-black mb-12">إعدادات المتجر العامة</h3>
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">الاسم التجاري الرسمي</label>
+             <input value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none focus:ring-2 focus:ring-[#00E5FF]/20 focus:bg-white transition-all" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">المحافظة</label>
+             <input value={governorate} onChange={(e) => setGovernorate(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none focus:ring-2 focus:ring-[#00E5FF]/20 focus:bg-white transition-all" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">المدينة</label>
+             <input value={city} onChange={(e) => setCity(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none focus:ring-2 focus:ring-[#00E5FF]/20 focus:bg-white transition-all" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">نوع المتجر</label>
+             <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none appearance-none">
+                <option value="RETAIL">محل تجاري</option>
+                <option value="RESTAURANT">مطعم / كافيه</option>
+                <option value="SERVICE">خدمات</option>
+             </select>
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">رقم الهاتف</label>
+             <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">البريد الإلكتروني</label>
+             <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">رقم الواتساب للتواصل</label>
+             <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" placeholder="01x xxxx xxxx" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">الدومين المخصص (اختياري)</label>
+             <input value={customDomain} onChange={(e) => setCustomDomain(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" placeholder="example.com" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">لوجو المتجر</label>
+             <div className="flex gap-4 items-center flex-row-reverse">
+                <div
+                  onClick={() => handlePickImage('logo')}
+                  className="w-28 h-28 rounded-[2rem] overflow-hidden bg-slate-50 border border-slate-100 shrink-0 cursor-pointer"
+                >
+                  <img
+                    src={logoUrl || 'https://images.unsplash.com/photo-1544441893-675973e31985?w=200'}
+                    className="w-full h-full object-cover"
+                    alt="logo"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePickImage('logo')}
+                    className="w-full py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm hover:bg-black transition-all"
+                  >
+                    اختيار صورة من الجهاز
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLogoUrl('')}
+                    className="w-full py-4 bg-slate-50 text-slate-500 rounded-[1.5rem] font-black text-sm hover:bg-slate-100 transition-all"
+                  >
+                    حذف الصورة
+                  </button>
+                </div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => handleImageChange('logo', e)}
+                />
+             </div>
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">بانر المتجر</label>
+             <div
+               onClick={() => handlePickImage('banner')}
+               className="relative aspect-video rounded-[2rem] overflow-hidden bg-slate-50 border border-slate-100 cursor-pointer"
+             >
+               <img
+                 src={bannerUrl || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200'}
+                 className="w-full h-full object-cover"
+                 alt="banner"
+               />
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => handlePickImage('banner')}
+                  className="py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm hover:bg-black transition-all"
+                >
+                  اختيار بانر من الجهاز
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBannerUrl('')}
+                  className="py-4 bg-slate-50 text-slate-500 rounded-[1.5rem] font-black text-sm hover:bg-slate-100 transition-all"
+                >
+                  حذف البانر
+                </button>
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => handleImageChange('banner', e)}
+                />
+             </div>
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">ساعات العمل</label>
+             <input value={openingHours} onChange={(e) => setOpeningHours(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" />
+          </div>
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">العنوان التفصيلي</label>
+             <input value={addressDetailed} onChange={(e) => setAddressDetailed(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" />
+          </div>
+          <div className="space-y-3 md:col-span-2">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">وصف المتجر</label>
+             <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none min-h-[140px]" />
+          </div>
+       </div>
+       <div className="mt-12 flex justify-end">
+          <button onClick={handleSave} disabled={saving} className="px-16 py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-black transition-all shadow-2xl disabled:bg-slate-300">{saving ? 'جاري الحفظ...' : 'حفظ كافة التغييرات السيادية'}</button>
+       </div>
+    </div>
+  );
+};
 
 const CreateOfferModal: React.FC<{product: Product | null, onClose: () => void, shopId: string}> = ({product, onClose, shopId}) => {
   const [discount, setDiscount] = useState('20');

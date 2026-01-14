@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { MOCK_SHOPS } from '@/constants';
 import { 
   ChevronLeft, Save, Layout, Palette, Image as ImageIcon, Check, 
   Monitor, Smartphone, Eye, Sparkles, Plus, HelpCircle, X, Menu, 
@@ -13,6 +12,13 @@ import { useToast } from '@/components';
 
 const MotionDiv = motion.div as any;
 
+const DEFAULT_PAGE_DESIGN = {
+  primaryColor: '#00E5FF',
+  layout: 'modern',
+  bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200',
+  headerType: 'centered',
+};
+
 const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { addToast } = useToast();
   const [shopId, setShopId] = useState<string>('');
@@ -21,6 +27,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('mobile');
   const [showSettingsMobile, setShowSettingsMobile] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   
   // AI Generation States
   const [isAIGenOpen, setIsAIGenOpen] = useState(false);
@@ -34,16 +41,36 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (savedUser) {
         const user = JSON.parse(savedUser);
         setShopId(user.shopId);
-        const shops = await ApiService.getShops('');
-        const myShop = shops.find((s: any) => s.id === user.shopId);
-        if (myShop && myShop.pageDesign) {
-          setConfig(myShop.pageDesign);
-        } else {
-          setConfig(MOCK_SHOPS[0].pageDesign);
+        try {
+          const myShop = await ApiService.getMyShop();
+          if (myShop && myShop.pageDesign) {
+            setConfig(myShop.pageDesign);
+          } else {
+            setConfig(DEFAULT_PAGE_DESIGN);
+          }
+        } catch {
+          setConfig(DEFAULT_PAGE_DESIGN);
         }
       }
     };
     loadCurrentDesign();
+  }, []);
+
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 768px)');
+    const apply = () => setIsDesktop(mql.matches);
+    apply();
+
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', apply);
+      return () => mql.removeEventListener('change', apply);
+    }
+
+    const legacyMql = mql as any;
+    if (typeof legacyMql.addListener === 'function') legacyMql.addListener(apply);
+    return () => {
+      if (typeof legacyMql.removeListener === 'function') legacyMql.removeListener(apply);
+    };
   }, []);
 
   const handleSave = async () => {
@@ -108,7 +135,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       
       {/* Control Sidebar */}
       <AnimatePresence>
-        {(showSettingsMobile || window.innerWidth > 768) && (
+        {(showSettingsMobile || isDesktop) && (
           <>
             <MotionDiv 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -117,9 +144,9 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             />
             
             <MotionDiv 
-              initial={window.innerWidth < 768 ? { y: '100%' } : { x: '100%' }}
-              animate={window.innerWidth < 768 ? { y: 0 } : { x: 0 }}
-              exit={window.innerWidth < 768 ? { y: '100%' } : { x: '100%' }}
+              initial={!isDesktop ? { y: '100%' } : { x: '100%' }}
+              animate={!isDesktop ? { y: 0 } : { x: 0 }}
+              exit={!isDesktop ? { y: '100%' } : { x: '100%' }}
               className="fixed bottom-0 left-0 right-0 md:relative md:w-[400px] lg:w-[450px] h-[80vh] md:h-full bg-white md:border-l border-slate-200 flex flex-col shadow-2xl z-[230] rounded-t-[2.5rem] md:rounded-none"
             >
               <header className="p-6 md:p-10 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-xl z-30">
@@ -222,7 +249,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <MotionDiv 
             layout
             className={`bg-white shadow-2xl overflow-hidden transition-all duration-700 flex flex-col ${
-              previewMode === 'mobile' ? 'w-full max-w-[375px] min-h-[667px] rounded-[3rem] border-[10px] border-slate-900' : 'w-full max-w-5xl rounded-[3rem]'
+              previewMode === 'mobile' ? 'w-full max-w-[375px] min-h-[667px] rounded-[3rem] border-[10px] border-slate-900 box-border' : 'w-full max-w-5xl rounded-[3rem]'
             }`}
           >
             <div className="h-40 md:h-64 relative shrink-0">
@@ -271,9 +298,9 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               initial={{ scale: 0.9, opacity: 0, y: 20 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-2xl rounded-[3rem] p-10 text-right overflow-hidden shadow-2xl"
+              className="relative bg-white w-full max-w-2xl rounded-3xl md:rounded-[3rem] p-6 md:p-10 text-right overflow-hidden shadow-2xl"
             >
-              <h2 className="text-3xl font-black mb-4 flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl font-black mb-4 flex items-center gap-3">
                 توليد غلاف بذكاء تست <Sparkles className="text-[#00E5FF]" />
               </h2>
               <p className="text-slate-400 font-bold mb-8 text-sm">صف شكل المحل أو النشاط اللي بتدور عليه وهنصممهولك فوراً.</p>
@@ -309,7 +336,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   <button 
                     disabled={isGenerating}
                     onClick={generateAIBanner}
-                    className="flex-1 py-5 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl"
+                    className="flex-1 py-4 md:py-5 bg-slate-900 text-white rounded-2xl font-black text-base md:text-lg hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl"
                   >
                     {isGenerating ? <Loader2 className="animate-spin" /> : <Wand2 size={20} />}
                     {isGenerating ? 'جاري التوليد...' : 'توليد تصميم جديد'}
@@ -317,7 +344,7 @@ const PageBuilder: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   {generatedImg && (
                     <button 
                       onClick={applyAIBanner}
-                      className="px-10 py-5 bg-[#00E5FF] text-black rounded-2xl font-black text-lg hover:scale-105 transition-all shadow-xl"
+                      className="px-6 md:px-10 py-4 md:py-5 bg-[#00E5FF] text-black rounded-2xl font-black text-base md:text-lg hover:scale-105 transition-all shadow-xl"
                     >
                       اعتماد التصميم
                     </button>

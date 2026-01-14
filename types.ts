@@ -73,6 +73,8 @@ export interface ShopGallery {
   id: string;
   shopId: string;
   imageUrl: string;
+  thumbUrl?: string;
+  mediumUrl?: string;
   caption?: string;
   createdAt: number;
 }

@@ -80,7 +80,7 @@ const ShopGalleryComponent: React.FC<ShopGalleryProps> = ({
             } shadow-lg hover:shadow-2xl transition-all duration-300`}
           >
             <img 
-              src={image.imageUrl} 
+              src={image.thumbUrl || image.imageUrl} 
               alt={image.caption || `${shopName} - ${index + 1}`}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
             />

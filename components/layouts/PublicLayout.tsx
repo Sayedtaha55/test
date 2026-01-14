@@ -66,14 +66,6 @@ const PublicLayout: React.FC = () => {
               : 'bg-white/60 border-transparent'
           }`}
         >
-          {/* Mobile Menu Trigger */}
-          <button 
-            onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden p-2 text-slate-900"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
           <Link to="/" className="flex items-center gap-3 md:gap-5 group shrink-0">
             <MotionDiv 
               whileHover={{ scale: 1.1, rotate: -2 }}
@@ -118,6 +110,13 @@ const PublicLayout: React.FC = () => {
                 دخول
               </Link>
             )}
+
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden p-2 text-slate-900"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </nav>
@@ -132,9 +131,8 @@ const PublicLayout: React.FC = () => {
                 <button onClick={() => setMobileMenuOpen(false)}><X className="w-6 h-6" /></button>
               </div>
               <nav className="flex flex-col gap-6 flex-1">
-                {!user && <MobileNavItem to="/signup?role=merchant" onClick={() => setMobileMenuOpen(false)} icon={<PlusCircle className="text-[#BD00FF]" />} label="تسجيل نشاط جديد" />}
-                <MobileNavItem to="/about" onClick={() => setMobileMenuOpen(false)} icon={<Info />} label="من نحن" />
-                <MobileNavItem to={user?.role === 'merchant' ? '/business/dashboard' : '/profile'} onClick={() => setMobileMenuOpen(false)} icon={<User />} label={user ? 'حسابي' : 'دخول'} />
+                <MobileNavItem to="/shops" onClick={() => setMobileMenuOpen(false)} icon={<ShoppingCart className="text-[#00E5FF]" />} label="المحلات" />
+                <MobileNavItem to="/restaurants" onClick={() => setMobileMenuOpen(false)} icon={<ShoppingCart className="text-[#BD00FF]" />} label="المطاعم" />
               </nav>
             </motion.div>
           </>
@@ -170,8 +168,6 @@ const PublicLayout: React.FC = () => {
               <h4 className="font-black text-[10px] uppercase tracking-widest text-[#BD00FF] mb-6">للأعمال</h4>
               <nav className="flex flex-col gap-4 text-slate-300 font-bold text-sm md:text-lg">
                 <Link to="/business" className="hover:text-white transition-colors">انضم إلينا</Link>
-                <Link to="/signup?role=merchant" className="hover:text-white transition-colors">تسجيل نشاط جديد</Link>
-                <Link to="/business/dashboard" className="hover:text-white transition-colors">لوحة التحكم</Link>
               </nav>
             </div>
           </div>

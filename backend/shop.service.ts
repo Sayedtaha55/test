@@ -11,6 +11,158 @@ export class ShopService {
     @Inject(MonitoringService) private readonly monitoring: MonitoringService
   ) {}
 
+  async getShopById(id: string) {
+    const startTime = Date.now();
+
+    try {
+      const shop = await this.prisma.shop.findUnique({
+        where: { id },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('findUnique', 'shops', duration, true);
+      this.monitoring.trackPerformance('getShopById_database', duration);
+
+      return shop;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('findUnique', 'shops', duration, false);
+      throw error;
+    }
+
+  }
+
+  async updateShopSettings(
+    shopId: string,
+    input: {
+      name?: string;
+      description?: string | null;
+      category?: string;
+      governorate?: string;
+      city?: string;
+      addressDetailed?: string | null;
+      phone?: string;
+      email?: string | null;
+      openingHours?: string | null;
+      logoUrl?: string | null;
+      bannerUrl?: string | null;
+      whatsapp?: string | null;
+      customDomain?: string | null;
+    },
+  ) {
+    const startTime = Date.now();
+
+    try {
+      const current = await this.prisma.shop.findUnique({
+        where: { id: shopId },
+        select: { id: true, slug: true, layoutConfig: true },
+      });
+
+      const prevLayout = (current?.layoutConfig as any) || {};
+      const nextLayout = {
+        ...prevLayout,
+        ...(typeof input.whatsapp === 'undefined' ? {} : { whatsapp: input.whatsapp }),
+        ...(typeof input.customDomain === 'undefined' ? {} : { customDomain: input.customDomain }),
+      };
+
+      const updated = await this.prisma.shop.update({
+        where: { id: shopId },
+        data: {
+          ...(typeof input.name === 'undefined' ? {} : { name: input.name }),
+          ...(typeof input.description === 'undefined' ? {} : { description: input.description }),
+          ...(typeof input.category === 'undefined' ? {} : { category: input.category as any }),
+          ...(typeof input.governorate === 'undefined' ? {} : { governorate: input.governorate }),
+          ...(typeof input.city === 'undefined' ? {} : { city: input.city }),
+          ...(typeof input.addressDetailed === 'undefined' ? {} : { addressDetailed: input.addressDetailed }),
+          ...(typeof input.phone === 'undefined' ? {} : { phone: input.phone }),
+          ...(typeof input.email === 'undefined' ? {} : { email: input.email }),
+          ...(typeof input.openingHours === 'undefined' ? {} : { openingHours: input.openingHours }),
+          ...(typeof input.logoUrl === 'undefined' ? {} : { logoUrl: input.logoUrl }),
+          ...(typeof input.bannerUrl === 'undefined' ? {} : { bannerUrl: input.bannerUrl }),
+          layoutConfig: nextLayout as any,
+        },
+      });
+
+      await this.redis.invalidateShopCache(updated.id, updated.slug);
+
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('update', 'shops', duration, true);
+      this.monitoring.trackPerformance('updateShopSettings_database', duration);
+
+      return updated;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('update', 'shops', duration, false);
+      throw error;
+    }
+  }
+
+  async getShopsByStatus(status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'ALL' = 'ALL') {
+    const startTime = Date.now();
+
+    try {
+      const shops = await this.prisma.shop.findMany({
+        where: {
+          ...(status === 'ALL' ? {} : { status: status as any }),
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('findMany', 'shops', duration, true);
+      this.monitoring.trackPerformance('getShopsByStatus_database', duration);
+
+      return shops;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('findMany', 'shops', duration, false);
+      throw error;
+    }
+  }
+
+  async updateShopStatus(shopId: string, status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED') {
+    const startTime = Date.now();
+
+    try {
+      const updated = await this.prisma.shop.update({
+        where: { id: shopId },
+        data: { status: status as any },
+      });
+
+      await this.redis.invalidateShopCache(updated.id, updated.slug);
+
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('update', 'shops', duration, true);
+      this.monitoring.trackPerformance('updateShopStatus_database', duration);
+
+      return updated;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.monitoring.trackDatabase('update', 'shops', duration, false);
+      throw error;
+    }
+  }
+
   async getAllShops() {
     const startTime = Date.now();
     

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, Bell, Zap, LogOut, ChevronRight, HelpCircle, Menu, X, Clock, CheckCircle2, UserPlus, ShoppingBag, Calendar } from 'lucide-react';
+import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, Bell, Zap, LogOut, ChevronRight, HelpCircle, Menu, X, Clock, CheckCircle2, UserPlus, ShoppingBag, Calendar, Camera, Users, Megaphone, MessageCircle, Palette } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ApiService } from '@/services/api.service';
 import { useToast } from '@/components';
@@ -22,9 +22,21 @@ const BusinessLayout: React.FC = () => {
   const userStr = localStorage.getItem('ray_user');
   const user = userStr ? JSON.parse(userStr) : null;
   const impersonateShopId = new URLSearchParams(location.search).get('impersonateShopId');
+  const activeTab = new URLSearchParams(location.search).get('tab') || 'overview';
   const effectiveUser = (user?.role === 'admin' && impersonateShopId)
     ? { ...user, role: 'merchant', shopId: impersonateShopId, name: `Admin (${impersonateShopId})` }
     : user;
+
+  const buildDashboardUrl = (tab?: string) => {
+    const params = new URLSearchParams(location.search);
+    if (!tab || tab === 'overview') {
+      params.delete('tab');
+    } else {
+      params.set('tab', tab);
+    }
+    const qs = params.toString();
+    return `/business/dashboard${qs ? `?${qs}` : ''}`;
+  };
 
   const loadNotifications = async () => {
     if (!effectiveUser?.shopId) return;
@@ -110,6 +122,14 @@ const BusinessLayout: React.FC = () => {
           <span className="font-black tracking-tighter uppercase">test Biz</span>
         </Link>
         <div className="flex items-center gap-4">
+           <button
+             onClick={() => navigate(buildDashboardUrl('builder'))}
+             aria-label="هوية المتجر"
+             title="هوية المتجر"
+             className="p-2 bg-white/10 rounded-lg"
+           >
+             <Palette className="w-6 h-6" />
+           </button>
            <div className="relative" onClick={() => { setNotifOpen(true); handleMarkRead(); }}>
               <motion.div animate={unreadCount > 0 ? { scale: [1, 1.2, 1] } : {}} transition={{ repeat: Infinity, duration: 1.5 }}>
                 <Bell className={`w-6 h-6 ${unreadCount > 0 ? 'text-[#00E5FF]' : 'text-white'}`} />
@@ -133,7 +153,7 @@ const BusinessLayout: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <aside className={`w-80 bg-slate-900 text-white flex flex-col fixed inset-y-0 right-0 z-[110] shadow-2xl transition-transform duration-500 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <aside className={`w-80 bg-slate-900 text-white flex flex-col fixed inset-y-0 right-0 z-[110] shadow-2xl transition-transform duration-500 ease-in-out overflow-hidden min-h-0 md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="p-10 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#00E5FF] flex items-center justify-center rounded-xl">
@@ -146,13 +166,19 @@ const BusinessLayout: React.FC = () => {
           </button>
         </div>
 
-        <nav className="flex-1 px-6 space-y-2 py-4">
-          <NavItem to="/business/dashboard" onClick={() => setSidebarOpen(false)} icon={<LayoutDashboard size={20} />} label="لوحة التحكم" active={location.search === '' || location.search === '?tab=overview'} />
-          <NavItem to="/business/dashboard?tab=pos" onClick={() => setSidebarOpen(false)} icon={<Store size={20} />} label="نظام الكاشير" />
-          <NavItem to="/business/dashboard?tab=products" onClick={() => setSidebarOpen(false)} icon={<ShoppingBag size={20} />} label="المنتجات" />
-          <NavItem to="/business/dashboard?tab=sales" onClick={() => setSidebarOpen(false)} icon={<CreditCard size={20} />} label="سجل المبيعات" />
-          <NavItem to="/business/dashboard?tab=reservations" onClick={() => setSidebarOpen(false)} icon={<Calendar size={20} />} label="الحجوزات" />
-          <NavItem to="/business/dashboard?tab=growth" onClick={() => setSidebarOpen(false)} icon={<Zap size={20} />} label="مركز النمو AI" />
+        <nav className="flex-1 px-6 space-y-2 py-4 overflow-y-auto no-scrollbar min-h-0">
+          <NavItem to={buildDashboardUrl('overview')} onClick={() => setSidebarOpen(false)} icon={<LayoutDashboard size={20} />} label="لوحة التحكم" active={activeTab === 'overview'} />
+          <NavItem to={buildDashboardUrl('pos')} onClick={() => setSidebarOpen(false)} icon={<Store size={20} />} label="نظام الكاشير" active={activeTab === 'pos'} />
+          <NavItem to={buildDashboardUrl('gallery')} onClick={() => setSidebarOpen(false)} icon={<Camera size={20} />} label="معرض الصور" active={activeTab === 'gallery'} />
+          <NavItem to={buildDashboardUrl('reports')} onClick={() => setSidebarOpen(false)} icon={<BarChart3 size={20} />} label="التقارير" active={activeTab === 'reports'} />
+          <NavItem to={buildDashboardUrl('customers')} onClick={() => setSidebarOpen(false)} icon={<Users size={20} />} label="العملاء" active={activeTab === 'customers'} />
+          <NavItem to={buildDashboardUrl('products')} onClick={() => setSidebarOpen(false)} icon={<ShoppingBag size={20} />} label="المخزون" active={activeTab === 'products'} />
+          <NavItem to={buildDashboardUrl('promotions')} onClick={() => setSidebarOpen(false)} icon={<Megaphone size={20} />} label="العروض" active={activeTab === 'promotions'} />
+          <NavItem to={buildDashboardUrl('reservations')} onClick={() => setSidebarOpen(false)} icon={<Calendar size={20} />} label="الحجوزات" active={activeTab === 'reservations'} />
+          <NavItem to={buildDashboardUrl('chats')} onClick={() => setSidebarOpen(false)} icon={<MessageCircle size={20} />} label="المحادثات" active={activeTab === 'chats'} />
+          <NavItem to={buildDashboardUrl('sales')} onClick={() => setSidebarOpen(false)} icon={<CreditCard size={20} />} label="سجل المبيعات" active={activeTab === 'sales'} />
+          <NavItem to={buildDashboardUrl('growth')} onClick={() => setSidebarOpen(false)} icon={<Zap size={20} />} label="مركز النمو AI" active={activeTab === 'growth'} />
+          <NavItem to={buildDashboardUrl('settings')} onClick={() => setSidebarOpen(false)} icon={<Settings size={20} />} label="الإعدادات" active={activeTab === 'settings'} />
         </nav>
 
         <div className="p-6 mt-auto border-t border-white/5 space-y-2">
@@ -212,6 +238,14 @@ const BusinessLayout: React.FC = () => {
              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">مركز العمليات - {effectiveUser?.name}</p>
           </div>
           <div className="flex items-center gap-8">
+            <button
+              onClick={() => navigate(buildDashboardUrl('builder'))}
+              aria-label="هوية المتجر"
+              title="هوية المتجر"
+              className="p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl text-slate-900 transition-all"
+            >
+              <Palette className="w-5 h-5" />
+            </button>
             <div className="relative cursor-pointer group" onClick={() => { setNotifOpen(true); handleMarkRead(); }}>
                <motion.div animate={unreadCount > 0 ? { scale: [1, 1.1, 1] } : {}} transition={{ repeat: Infinity, duration: 2 }}>
                  <Bell className={`w-6 h-6 transition-colors ${unreadCount > 0 ? 'text-[#00E5FF]' : 'text-slate-300 group-hover:text-slate-900'}`} />

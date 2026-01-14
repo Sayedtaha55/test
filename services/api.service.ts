@@ -1,15 +1,8 @@
 import { Shop, Product, Offer, Reservation, Category, ShopGallery } from '../types';
-import { MOCK_SHOPS } from '../constants';
 
 // Mock implementation since we removed Supabase
 class MockDatabase {
-  private shops = (MOCK_SHOPS as any[]).map((s) => ({
-    ...s,
-    status: s.status ?? 'approved',
-    // aliases for older code paths using snake_case
-    logo_url: s.logo_url ?? s.logoUrl,
-    banner_url: s.banner_url ?? s.bannerUrl ?? s.pageDesign?.bannerUrl,
-  }));
+  private shops: any[] = [];
   private messages: any[] = [];
   private notifications: any[] = [];
   private offers: any[] = [];
@@ -477,11 +470,98 @@ const mockDb = new MockDatabase();
 
 const BACKEND_BASE_URL = ((import.meta as any)?.env?.VITE_BACKEND_URL as string) || 'http://localhost:4000';
 
+function toBackendUrl(url: string) {
+  if (!url) return url;
+  return url.startsWith('/') ? `${BACKEND_BASE_URL}${url}` : url;
+}
+
 async function backendPost<T>(path: string, body: any): Promise<T> {
+  const token = getAuthToken();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
+      ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: isFormData ? body : JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const data = await res.json();
+      message = data?.message || data?.error || message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+async function backendDelete<T>(path: string): Promise<T> {
+  const token = getAuthToken();
+  const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const data = await res.json();
+      message = data?.message || data?.error || message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+function getAuthToken() {
+  try {
+    return localStorage.getItem('ray_token') || '';
+  } catch {
+    return '';
+  }
+}
+
+async function backendGet<T>(path: string): Promise<T> {
+  const token = getAuthToken();
+  const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const data = await res.json();
+      message = data?.message || data?.error || message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+async function backendPatch<T>(path: string, body: any): Promise<T> {
+  const token = getAuthToken();
+  const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -500,13 +580,52 @@ async function backendPost<T>(path: string, body: any): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function normalizeUserFromBackend(user: any) {
+  return {
+    ...user,
+    role: String(user?.role || '').toLowerCase(),
+  };
+}
+
+function normalizeShopFromBackend(shop: any) {
+  if (!shop) return shop;
+  const logoUrl = shop.logoUrl ?? shop.logo_url;
+  const bannerUrl = shop.bannerUrl ?? shop.banner_url;
+  const status = String(shop.status || '').toLowerCase();
+  return {
+    ...shop,
+    status,
+    logoUrl,
+    bannerUrl,
+    // legacy snake_case for current UI
+    logo_url: shop.logo_url ?? logoUrl,
+    banner_url: shop.banner_url ?? bannerUrl,
+    pageDesign: shop.pageDesign || shop.page_design || shop.pageDesign || null,
+  };
+}
+
+function normalizeProductFromBackend(product: any) {
+  if (!product) return product;
+  const imageUrl = product.imageUrl ?? product.image_url ?? product.image ?? '';
+  const shopId = product.shopId ?? product.shop_id;
+  return {
+    ...product,
+    imageUrl,
+    image_url: product.image_url ?? imageUrl,
+    shopId,
+    shop_id: product.shop_id ?? shopId,
+    stock: typeof product.stock === 'number' ? product.stock : Number(product.stock || 0),
+    price: typeof product.price === 'number' ? product.price : Number(product.price || 0),
+  };
+}
+
 async function loginViaBackend(email: string, pass: string) {
   const data = await backendPost<{ access_token: string; user: any }>(
     '/api/v1/auth/login',
     { email, password: pass },
   );
   return {
-    user: data.user,
+    user: normalizeUserFromBackend(data.user),
     session: { access_token: data.access_token },
   };
 }
@@ -517,7 +636,7 @@ async function signupViaBackend(payload: any) {
     payload,
   );
   return {
-    user: data.user,
+    user: normalizeUserFromBackend(data.user),
     session: { access_token: data.access_token },
   };
 }
@@ -525,18 +644,10 @@ async function signupViaBackend(payload: any) {
 export const ApiService = {
   // Auth
   login: async (email: string, pass: string) => {
-    try {
-      return await loginViaBackend(email, pass);
-    } catch {
-      return await mockDb.login(email, pass);
-    }
+    return await loginViaBackend(email, pass);
   },
   signup: async (data: any) => {
-    try {
-      return await signupViaBackend(data);
-    } catch {
-      return await mockDb.signup(data);
-    }
+    return await signupViaBackend(data);
   },
 
   // Chat
@@ -551,11 +662,61 @@ export const ApiService = {
   markNotificationsRead: mockDb.markNotificationsRead.bind(mockDb),
 
   // Shops
-  getShops: mockDb.getShops.bind(mockDb),
-  updateShopDesign: mockDb.updateShopDesign.bind(mockDb),
-  getShopBySlugOrId: mockDb.getShopBySlugOrId.bind(mockDb),
-  getShopBySlug: mockDb.getShopBySlug.bind(mockDb),
-  updateShopStatus: mockDb.updateShopStatus.bind(mockDb),
+  getShops: async (filterStatus: 'approved' | 'pending' | 'rejected' | 'all' | '' = 'approved') => {
+    const status = String(filterStatus || 'approved').toLowerCase();
+    // Public shops list (approved only)
+    if (!status || status === 'approved') {
+      const shops = await backendGet<any[]>('/api/v1/shops');
+      return shops.map(normalizeShopFromBackend);
+    }
+
+    // Admin list (requires token)
+    if (status === 'all') {
+      const shops = await backendGet<any[]>('/api/v1/shops/admin/list?status=ALL');
+      return shops.map(normalizeShopFromBackend);
+    }
+    if (status === 'pending') {
+      const shops = await backendGet<any[]>('/api/v1/shops/admin/list?status=PENDING');
+      return shops.map(normalizeShopFromBackend);
+    }
+    if (status === 'rejected') {
+      const shops = await backendGet<any[]>('/api/v1/shops/admin/list?status=REJECTED');
+      return shops.map(normalizeShopFromBackend);
+    }
+
+    const shops = await backendGet<any[]>('/api/v1/shops');
+    return shops.map(normalizeShopFromBackend);
+  },
+  updateShopDesign: async (id: string, designConfig: any) => {
+    return await backendPatch<any>(`/api/v1/shops/${encodeURIComponent(id)}/design`, designConfig);
+  },
+  getShopBySlugOrId: async (slugOrId: string) => {
+    const shop = await backendGet<any>(`/api/v1/shops/${encodeURIComponent(slugOrId)}`);
+    return normalizeShopFromBackend(shop);
+  },
+  getShopBySlug: async (slug: string) => {
+    const shop = await backendGet<any>(`/api/v1/shops/${encodeURIComponent(slug)}`);
+    return normalizeShopFromBackend(shop);
+  },
+  getMyShop: async () => {
+    const shop = await backendGet<any>('/api/v1/shops/me');
+    return normalizeShopFromBackend(shop);
+  },
+  updateMyShop: async (payload: any) => {
+    const shop = await backendPatch<any>('/api/v1/shops/me', payload);
+    return normalizeShopFromBackend(shop);
+  },
+  getShopAdminById: async (id: string) => {
+    const shop = await backendGet<any>(`/api/v1/shops/admin/${encodeURIComponent(id)}`);
+    return normalizeShopFromBackend(shop);
+  },
+  updateShopStatus: async (id: string, status: 'approved' | 'pending' | 'rejected') => {
+    const mapped = String(status || '').toUpperCase();
+    const updated = await backendPatch<any>(`/api/v1/shops/admin/${encodeURIComponent(id)}/status`, {
+      status: mapped,
+    });
+    return normalizeShopFromBackend(updated);
+  },
   followShop: mockDb.followShop.bind(mockDb),
   incrementVisitors: mockDb.incrementVisitors.bind(mockDb),
 
@@ -566,11 +727,29 @@ export const ApiService = {
   getOfferByProductId: mockDb.getOfferByProductId.bind(mockDb),
 
   // Products
-  getProducts: mockDb.getProducts.bind(mockDb),
-  getProductById: mockDb.getProductById.bind(mockDb),
-  addProduct: mockDb.addProduct.bind(mockDb),
-  updateProductStock: mockDb.updateProductStock.bind(mockDb),
-  deleteProduct: mockDb.deleteProduct.bind(mockDb),
+  getProducts: async (shopId?: string) => {
+    if (shopId) {
+      const products = await backendGet<any[]>(`/api/v1/products?shopId=${encodeURIComponent(shopId)}`);
+      return products.map(normalizeProductFromBackend);
+    }
+    return [];
+  },
+  getProductById: async (id: string) => {
+    const product = await backendGet<any>(`/api/v1/products/${encodeURIComponent(id)}`);
+    return normalizeProductFromBackend(product);
+  },
+  addProduct: async (product: any) => {
+    const created = await backendPost<any>('/api/v1/products', product);
+    return normalizeProductFromBackend(created);
+  },
+  updateProductStock: async (id: string, stock: number) => {
+    const updated = await backendPatch<any>(`/api/v1/products/${encodeURIComponent(id)}/stock`, { stock });
+    return normalizeProductFromBackend(updated);
+  },
+  deleteProduct: async (id: string) => {
+    const deleted = await backendDelete<any>(`/api/v1/products/${encodeURIComponent(id)}`);
+    return normalizeProductFromBackend(deleted);
+  },
 
   // Reservations
   getReservations: mockDb.getReservations.bind(mockDb),
@@ -592,9 +771,37 @@ export const ApiService = {
 
   // Shop analytics / gallery
   getShopAnalytics: mockDb.getShopAnalytics.bind(mockDb),
-  getShopGallery: mockDb.getShopGallery.bind(mockDb),
-  addShopGalleryImage: mockDb.addShopGalleryImage.bind(mockDb),
-  deleteShopGalleryImage: mockDb.deleteShopGalleryImage.bind(mockDb),
+  getShopGallery: async (shopId: string) => {
+    const images = await backendGet<any[]>(`/api/v1/gallery/${shopId}`);
+    return (images || []).map((img: any) => ({
+      ...img,
+      imageUrl: toBackendUrl(img?.imageUrl),
+      thumbUrl: toBackendUrl(img?.thumbUrl),
+      mediumUrl: toBackendUrl(img?.mediumUrl),
+    }));
+  },
+  addShopGalleryImage: async (shopId: string, image: any) => {
+    const formData = new FormData();
+    if (image.file) {
+      formData.append('image', image.file);
+      formData.append('caption', image.caption || '');
+      formData.append('shopId', shopId);
+      const created = await backendPost<any>(`/api/v1/gallery/upload`, formData);
+      return {
+        ...created,
+        imageUrl: toBackendUrl(created?.imageUrl),
+        thumbUrl: toBackendUrl(created?.thumbUrl),
+        mediumUrl: toBackendUrl(created?.mediumUrl),
+      };
+    } else if (image.url) {
+      // For URL-based images, create a mock entry
+      return mockDb.addShopGalleryImage(shopId, image);
+    }
+    return { error: 'No image provided' };
+  },
+  deleteShopGalleryImage: async (imageId: string) => {
+    return backendDelete(`/api/v1/gallery/${imageId}`);
+  },
 
   // Users
   getAllUsers: mockDb.getAllUsers.bind(mockDb),
@@ -603,7 +810,10 @@ export const ApiService = {
 
   // Analytics
   getSystemAnalytics: mockDb.getSystemAnalytics.bind(mockDb),
-  getPendingShops: mockDb.getPendingShops.bind(mockDb),
+  getPendingShops: async () => {
+    const shops = await backendGet<any[]>('/api/v1/shops/admin/list?status=PENDING');
+    return shops.map(normalizeShopFromBackend);
+  },
 
   // Themes
   getThemeTemplates: mockDb.getThemeTemplates.bind(mockDb),

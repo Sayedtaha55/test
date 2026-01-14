@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, MapPin, Grid, List, Filter } from 'lucide-react';
-import { MOCK_SHOPS } from '@/constants';
 import { motion } from 'framer-motion';
 import * as ReactRouterDOM from 'react-router-dom';
+import { ApiService } from '@/services/api.service';
 
 const { Link } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
@@ -12,10 +12,36 @@ const FilterPage: React.FC = () => {
   const [governorate, setGovernorate] = useState('All');
   const [category, setCategory] = useState('All');
 
-  const filteredShops = MOCK_SHOPS.filter(shop => 
-    (governorate === 'All' || shop.governorate === governorate) &&
-    (category === 'All' || shop.category === category)
-  );
+  const [shops, setShops] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    ApiService.getShops('approved')
+      .then((data: any[]) => {
+        if (!mounted) return;
+        setShops(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setShops([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredShops = shops
+    .filter((s) => String(s?.status || '').toLowerCase() === 'approved')
+    .filter(
+      (shop) =>
+        (governorate === 'All' || shop.governorate === governorate) &&
+        (category === 'All' || shop.category === category),
+    );
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
@@ -66,7 +92,12 @@ const FilterPage: React.FC = () => {
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {filteredShops.map((shop, idx) => (
+            {loading ? (
+              <div className="text-slate-400 font-bold">Loading...</div>
+            ) : filteredShops.length === 0 ? (
+              <div className="text-slate-400 font-bold">No stores found</div>
+            ) : (
+              filteredShops.map((shop, idx) => (
               <MotionDiv 
                 key={shop.id}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -75,7 +106,7 @@ const FilterPage: React.FC = () => {
                 className="group bg-white border border-slate-100 p-6 rounded-[2rem] hover:shadow-2xl hover:shadow-cyan-50 transition-all flex gap-6"
               >
                 <div className="w-32 h-32 rounded-2xl overflow-hidden flex-shrink-0">
-                  <img src={shop.logoUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={shop.name} />
+                  <img src={shop.logoUrl || shop.logo_url || 'https://images.unsplash.com/photo-1544441893-675973e31985?w=200'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={shop.name} />
                 </div>
                 <div className="flex-1 flex flex-col justify-between py-2">
                   <div>
@@ -93,7 +124,8 @@ const FilterPage: React.FC = () => {
                   </Link>
                 </div>
               </MotionDiv>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

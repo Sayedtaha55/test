@@ -1,10 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, MapPin, Store, ChevronLeft } from 'lucide-react';
-import { MOCK_SHOPS } from '@/constants';
 import { Category } from '@/types';
 import { motion } from 'framer-motion';
 import * as ReactRouterDOM from 'react-router-dom';
+import { ApiService } from '@/services/api.service';
 
 const { Link } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
@@ -13,11 +13,37 @@ const ShopsPage: React.FC = () => {
   const [governorate, setGovernorate] = useState('الكل');
   const [search, setSearch] = useState('');
 
-  const shops = MOCK_SHOPS.filter(s => 
-    s.category === Category.RETAIL && 
-    (governorate === 'الكل' || s.governorate === governorate) &&
-    (s.name.toLowerCase().includes(search.toLowerCase()))
-  );
+  const [shopsList, setShopsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    ApiService.getShops('approved')
+      .then((data: any[]) => {
+        if (!mounted) return;
+        setShopsList(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setShopsList([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const shops = shopsList
+    .filter((s) => String(s?.status || '').toLowerCase() === 'approved')
+    .filter(
+      (s) =>
+        s.category === Category.RETAIL &&
+        (governorate === 'الكل' || s.governorate === governorate) &&
+        String(s?.name || '').toLowerCase().includes(search.toLowerCase()),
+    );
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 md:py-12 text-right" dir="rtl">
@@ -54,7 +80,12 @@ const ShopsPage: React.FC = () => {
 
       {/* Shops Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
-        {shops.map((shop, idx) => (
+        {loading ? (
+          <div className="text-slate-400 font-bold">جاري التحميل...</div>
+        ) : shops.length === 0 ? (
+          <div className="text-slate-400 font-bold">لا توجد محلات حالياً</div>
+        ) : (
+          shops.map((shop, idx) => (
           <MotionDiv 
             key={shop.id}
             initial={{ opacity: 0, y: 20 }}
@@ -64,7 +95,7 @@ const ShopsPage: React.FC = () => {
           >
             <div className="flex items-center gap-4 md:gap-6">
               <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl md:rounded-3xl overflow-hidden border border-slate-100 shrink-0">
-                <img src={shop.logoUrl} className="w-full h-full object-cover" alt={shop.name} />
+                <img src={shop.logoUrl || shop.logo_url || 'https://images.unsplash.com/photo-1544441893-675973e31985?w=200'} className="w-full h-full object-cover" alt={shop.name} />
               </div>
               <div>
                 <h3 className="text-xl md:text-2xl font-black mb-1">{shop.name}</h3>
@@ -75,7 +106,7 @@ const ShopsPage: React.FC = () => {
             </div>
             
             <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-50">
-               <img src={shop.pageDesign.bannerUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="banner" />
+               <img src={shop?.pageDesign?.bannerUrl || shop?.bannerUrl || shop?.banner_url || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="banner" />
                <div className="absolute inset-0 bg-black/10" />
             </div>
 
@@ -86,7 +117,8 @@ const ShopsPage: React.FC = () => {
               زيارة المتجر <ChevronLeft size={18} />
             </Link>
           </MotionDiv>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
