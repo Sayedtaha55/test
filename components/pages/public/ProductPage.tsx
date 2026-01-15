@@ -69,6 +69,17 @@ const ProductPage: React.FC = () => {
     if (product) {
       const state = RayDB.toggleFavorite(product.id);
       setIsFavorite(state);
+      // Notify other components that favorites changed
+      window.dispatchEvent(new Event('ray-db-update'));
+      
+      // Show toast notification
+      const message = state ? 'تمت إضافة المنتج للمفضلة! ❤️' : 'تم حذف المنتج من المفضلة';
+      // Simple notification (you can replace with a proper toast system)
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl z-[9999] font-black text-sm animate-pulse';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
     }
   };
 

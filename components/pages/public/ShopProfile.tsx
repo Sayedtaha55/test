@@ -8,7 +8,8 @@ import {
   Star, ChevronRight, X, Plus, Check, Heart, Users, 
   CalendarCheck, Eye, Layout, Palette, Layers, MousePointer2, 
   Zap, Loader2, AlertCircle, Home, Share2, Utensils, ShoppingBag, 
-  Info, Clock, MapPin, Phone, MessageCircle, Sliders, Monitor, Send, Camera
+  Info, Clock, MapPin, Phone, MessageCircle, Sliders, Monitor, Send, Camera,
+  Tag
 } from 'lucide-react';
 import ReservationModal from '../shared/ReservationModal';
 import { ShopGallery as ShopGalleryComponent, useToast } from '@/components';
@@ -42,6 +43,16 @@ const ProductCard: React.FC<{
     e.stopPropagation();
     const state = RayDB.toggleFavorite(product.id);
     setIsFavorite(state);
+    // Notify other components that favorites changed
+    window.dispatchEvent(new Event('ray-db-update'));
+    
+    // Show toast notification
+    const message = state ? 'تمت إضافة المنتج للمفضلة! ❤️' : 'تم حذف المنتج من المفضلة';
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl z-[9999] font-black text-sm animate-pulse';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
   };
 
   const currentPrice = offer ? offer.newPrice : product.price;
@@ -242,7 +253,7 @@ const ShopProfile: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [galleryImages, setGalleryImages] = useState<ShopGallery[]>([]);
-  const [activeTab, setActiveTab] = useState<'products' | 'gallery' | 'info'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'offers' | 'gallery' | 'info'>('products');
   const [activeCategory, setActiveCategory] = useState('الكل');
   const [hasFollowed, setHasFollowed] = useState(false);
   const [selectedProductForRes, setSelectedProductForRes] = useState<any | null>(null);
@@ -329,6 +340,22 @@ const ShopProfile: React.FC = () => {
   
   const categories = ['الكل', ...new Set(products.map(p => (p as any).category || 'عام'))];
   const filteredProducts = activeCategory === 'الكل' ? products : products.filter(p => (p as any).category === activeCategory);
+  
+  // Separate products with and without offers
+  const productsWithoutOffers = filteredProducts.filter(p => {
+    const hasOffer = offers.some(o => o.productId === p.id);
+    return !hasOffer;
+  });
+  const productsWithOffers = filteredProducts.filter(p => {
+    const hasOffer = offers.some(o => o.productId === p.id);
+    return hasOffer;
+  });
+
+  // Debug logging (remove in production)
+  console.log('Total products:', filteredProducts.length);
+  console.log('Products without offers:', productsWithoutOffers.length);
+  console.log('Products with offers:', productsWithOffers.length);
+  console.log('Offers loaded:', offers.length);
 
   return (
     <div className={`min-h-screen text-right font-sans overflow-x-hidden ${isMinimal ? 'bg-slate-50' : 'bg-white'}`} dir="rtl">
@@ -409,7 +436,14 @@ const ShopProfile: React.FC = () => {
            <NavTab 
              active={activeTab === 'products'} 
              onClick={() => setActiveTab('products')} 
-             label={isRestaurant ? "المنيو الرقمي" : "المعروضات"} 
+             label="المنتجات" 
+             primaryColor={currentDesign.primaryColor}
+             layout={currentDesign.layout}
+           />
+           <NavTab 
+             active={activeTab === 'offers'} 
+             onClick={() => setActiveTab('offers')} 
+             label="العروض" 
              primaryColor={currentDesign.primaryColor}
              layout={currentDesign.layout}
            />
@@ -445,18 +479,18 @@ const ShopProfile: React.FC = () => {
               </div>
               
               <div className={`grid gap-3 md:gap-8 ${isMinimal ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
-                {filteredProducts.length === 0 ? (
+                {productsWithoutOffers.length === 0 ? (
                   <div className="col-span-full py-16 md:py-24 text-center text-slate-300 font-bold border-2 border-dashed border-slate-100 rounded-[2rem] md:rounded-[3rem]">
                     <Info size={40} className="md:w-12 md:h-12 mx-auto mb-4 opacity-20" />
-                    لا توجد أصناف في هذا القسم حالياً.
+                    لا توجد منتجات بدون خصم في هذا القسم حالياً.
                   </div>
                 ) : (
-                  filteredProducts.map((p) => (
+                  productsWithoutOffers.map((p) => (
                     <ProductCard 
                       key={p.id} 
                       product={p} 
                       design={currentDesign!} 
-                      offer={offers.find(o => o.productId === p.id)}
+                      offer={undefined}
                       onAdd={(prod, price) => {
                         setAddedItemId(prod.id);
                         RayDB.addToCart({ ...prod, price, quantity: 1, shopId: shop.id, shopName: shop.name });
@@ -466,6 +500,45 @@ const ShopProfile: React.FC = () => {
                       onReserve={(data) => setSelectedProductForRes({...data, shopId: shop.id, shopName: shop.name})}
                     />
                   ))
+                )}
+              </div>
+            </MotionDiv>
+          ) : activeTab === 'offers' ? (
+            <MotionDiv key="offers-view" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <div className="mb-8 md:mb-10">
+                <h2 className={`font-black mb-4 md:mb-6 ${isBold ? 'text-2xl md:text-4xl' : 'text-xl md:text-3xl'}`} style={{ color: '#BD00FF' }}>
+                  عروض {shop.name}
+                </h2>
+                <p className="text-slate-600 text-sm md:text-base">
+                  استكشف أفضل الخصومات والعروض الحصرية من {shop.name}
+                </p>
+              </div>
+              
+              <div className={`grid gap-3 md:gap-8 ${isMinimal ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+                {productsWithOffers.length === 0 ? (
+                  <div className="col-span-full py-16 md:py-24 text-center text-slate-300 font-bold border-2 border-dashed border-slate-100 rounded-[2rem] md:rounded-[3rem]">
+                    <Tag size={40} className="md:w-12 md:h-12 mx-auto mb-4 opacity-20" />
+                    لا توجد عروض متاحة حالياً.
+                  </div>
+                ) : (
+                  productsWithOffers.map((p) => {
+                    const offer = offers.find(o => o.productId === p.id);
+                    return (
+                      <ProductCard 
+                        key={p.id} 
+                        product={p} 
+                        design={currentDesign!} 
+                        offer={offer}
+                        onAdd={(prod, price) => {
+                          setAddedItemId(prod.id);
+                          RayDB.addToCart({ ...prod, price, quantity: 1, shopId: shop.id, shopName: shop.name });
+                          setTimeout(() => setAddedItemId(null), 1500);
+                        }} 
+                        isAdded={addedItemId === p.id} 
+                        onReserve={(data) => setSelectedProductForRes({...data, shopId: shop.id, shopName: shop.name})}
+                      />
+                    );
+                  })
                 )}
               </div>
             </MotionDiv>

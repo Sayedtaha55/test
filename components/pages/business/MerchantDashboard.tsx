@@ -17,6 +17,7 @@ import PageBuilder from './PageBuilder';
 import GalleryManager from './GalleryManager';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar } from 'recharts';
 import { useToast } from '@/components';
+import { RayDB } from '@/constants';
 
 const { useSearchParams, useNavigate } = ReactRouterDOM as any;
 const MotionDiv = motion.div as any;
@@ -1377,9 +1378,11 @@ const ActivityItem: React.FC<{n: any}> = ({n}) => (
 const SettingsTab: React.FC<{shop: any, onSaved: () => void, adminShopId?: string}> = ({shop, onSaved, adminShopId}) => {
   const { addToast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [savingReceiptTheme, setSavingReceiptTheme] = useState(false);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const receiptLogoInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(shop?.name || '');
   const [governorate, setGovernorate] = useState(shop?.governorate || '');
@@ -1394,6 +1397,22 @@ const SettingsTab: React.FC<{shop: any, onSaved: () => void, adminShopId?: strin
   const [openingHours, setOpeningHours] = useState(shop?.openingHours || shop?.opening_hours || '');
   const [addressDetailed, setAddressDetailed] = useState(shop?.addressDetailed || shop?.address_detailed || '');
   const [description, setDescription] = useState(shop?.description || '');
+
+  const receiptShopId = String(adminShopId || shop?.id || '');
+  const [receiptShopName, setReceiptShopName] = useState('');
+  const [receiptPhone, setReceiptPhone] = useState('');
+  const [receiptAddress, setReceiptAddress] = useState('');
+  const [receiptLogoDataUrl, setReceiptLogoDataUrl] = useState('');
+  const [receiptFooterNote, setReceiptFooterNote] = useState('');
+
+  useEffect(() => {
+    const theme = RayDB.getReceiptTheme(receiptShopId);
+    setReceiptShopName(String((theme as any)?.shopName || shop?.name || ''));
+    setReceiptPhone(String((theme as any)?.phone || shop?.phone || ''));
+    setReceiptAddress(String((theme as any)?.address || shop?.addressDetailed || shop?.address_detailed || ''));
+    setReceiptLogoDataUrl(String((theme as any)?.logoDataUrl || ''));
+    setReceiptFooterNote(String((theme as any)?.footerNote || ''));
+  }, [receiptShopId]);
 
   const handlePickImage = (kind: 'logo' | 'banner') => {
     if (kind === 'logo') {
@@ -1417,6 +1436,46 @@ const SettingsTab: React.FC<{shop: any, onSaved: () => void, adminShopId?: strin
       else setBannerUrl(dataUrl);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handlePickReceiptLogo = () => {
+    receiptLogoInputRef.current?.click();
+  };
+
+  const handleReceiptLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      addToast('الصورة كبيرة جداً، يرجى اختيار صورة أقل من 2 ميجابايت', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setReceiptLogoDataUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveReceiptTheme = async () => {
+    if (!receiptShopId) {
+      addToast('لا يمكن حفظ ثيم الفاتورة بدون متجر', 'error');
+      return;
+    }
+    setSavingReceiptTheme(true);
+    try {
+      RayDB.setReceiptTheme(receiptShopId, {
+        shopName: receiptShopName,
+        phone: receiptPhone,
+        address: receiptAddress,
+        logoDataUrl: receiptLogoDataUrl,
+        footerNote: receiptFooterNote,
+      });
+      addToast('تم حفظ ثيم الفاتورة', 'success');
+    } catch {
+      addToast('فشل حفظ ثيم الفاتورة', 'error');
+    } finally {
+      setSavingReceiptTheme(false);
+    }
   };
 
   const handleSave = async () => {
@@ -1575,6 +1634,54 @@ const SettingsTab: React.FC<{shop: any, onSaved: () => void, adminShopId?: strin
              <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none min-h-[140px]" />
           </div>
        </div>
+
+       <div className="mt-16 pt-12 border-t border-slate-100">
+          <h4 className="text-2xl font-black mb-10">ثيم الفاتورة</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">اسم المتجر على الفاتورة</label>
+              <input value={receiptShopName} onChange={(e) => setReceiptShopName(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none focus:ring-2 focus:ring-[#00E5FF]/20 focus:bg-white transition-all" />
+            </div>
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">هاتف الفاتورة</label>
+              <input value={receiptPhone} onChange={(e) => setReceiptPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" />
+            </div>
+            <div className="space-y-3 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">عنوان الفاتورة</label>
+              <input value={receiptAddress} onChange={(e) => setReceiptAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" />
+            </div>
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">شعار الفاتورة (اختياري)</label>
+              <div className="flex gap-4 items-center flex-row-reverse">
+                <div onClick={handlePickReceiptLogo} className="w-28 h-28 rounded-[2rem] overflow-hidden bg-slate-50 border border-slate-100 shrink-0 cursor-pointer">
+                  {receiptLogoDataUrl ? (
+                    <img src={receiptLogoDataUrl} className="w-full h-full object-cover" alt="receipt-logo" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                      <ImageIcon size={24} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 flex flex-col gap-3">
+                  <button type="button" onClick={handlePickReceiptLogo} className="w-full py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm hover:bg-black transition-all">اختيار شعار من الجهاز</button>
+                  <button type="button" onClick={() => setReceiptLogoDataUrl('')} className="w-full py-4 bg-slate-50 text-slate-500 rounded-[1.5rem] font-black text-sm hover:bg-slate-100 transition-all">حذف الشعار</button>
+                </div>
+                <input ref={receiptLogoInputRef} type="file" hidden accept="image/*" onChange={handleReceiptLogoChange} />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-6">ملاحظة أسفل الفاتورة</label>
+              <input value={receiptFooterNote} onChange={(e) => setReceiptFooterNote(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] py-6 px-10 font-black text-lg text-right outline-none" placeholder="شكراً لزيارتكم" />
+            </div>
+          </div>
+
+          <div className="mt-10 flex justify-end">
+            <button onClick={handleSaveReceiptTheme} disabled={savingReceiptTheme} className="px-14 py-5 bg-[#00E5FF] text-slate-900 rounded-[2rem] font-black text-lg hover:brightness-95 transition-all shadow-xl disabled:bg-slate-200">
+              {savingReceiptTheme ? 'جاري حفظ ثيم الفاتورة...' : 'حفظ ثيم الفاتورة'}
+            </button>
+          </div>
+       </div>
+
        <div className="mt-12 flex justify-end">
           <button onClick={handleSave} disabled={saving} className="px-16 py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-black transition-all shadow-2xl disabled:bg-slate-300">{saving ? 'جاري الحفظ...' : 'حفظ كافة التغييرات السيادية'}</button>
        </div>

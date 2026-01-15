@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
-import { RedisService } from './redis/redis.service';
+// import { RedisService } from './redis/redis.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
@@ -10,7 +10,7 @@ import sharp from 'sharp';
 export class GalleryService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(RedisService) private readonly redis: RedisService,
+    // @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
   private getVariantUrls(imageUrl: string) {
@@ -147,7 +147,7 @@ export class GalleryService {
 
     // Invalidate cache
     try {
-      await this.redis.del(`gallery:${targetShopId}`);
+      // await this.redis.del(`gallery:${targetShopId}`);
     } catch {}
 
     return {
@@ -164,10 +164,10 @@ export class GalleryService {
     
     // Try cache first
     try {
-      const cached = await this.redis.get<any>(cacheKey);
-      if (Array.isArray(cached)) {
-        return cached;
-      }
+      // const cached = await this.redis.get<any>(cacheKey);
+      // if (Array.isArray(cached)) {
+      //   return cached;
+      // }
     } catch {}
 
     let images: any[] = [];
@@ -196,7 +196,7 @@ export class GalleryService {
 
     // Cache for 5 minutes
     try {
-      await this.redis.set(`gallery:${shopId}`, mapped, 300);
+      // await this.redis.set(`gallery:${shopId}`, mapped, 300);
     } catch {}
 
     return mapped;
@@ -253,7 +253,7 @@ export class GalleryService {
 
     // Invalidate cache
     try {
-      await this.redis.del(`gallery:${image.shopId}`);
+      // await this.redis.del(`gallery:${image.shopId}`);
     } catch {
       // ignore
     }
@@ -294,7 +294,7 @@ export class GalleryService {
       });
 
       try {
-        await this.redis.del(`gallery:${existing.shopId}`);
+        // await this.redis.del(`gallery:${existing.shopId}`);
       } catch {}
 
       return { success: true };
@@ -315,7 +315,7 @@ export class GalleryService {
 
     // Invalidate cache
     try {
-      await this.redis.del(`gallery:${shopId}`);
+      // await this.redis.del(`gallery:${shopId}`);
     } catch {
       // ignore
     }

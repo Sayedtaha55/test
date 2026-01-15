@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
+// import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { ShopModule } from './shop.module';
 import { ProductModule } from './product.module';
@@ -20,7 +20,7 @@ import { DatabaseTestController } from './db-test.controller';
       isGlobal: true,
     }),
     PrismaModule,
-    RedisModule,
+    // RedisModule, // Temporarily disabled
     AuthModule,
     ShopModule,
     ProductModule,

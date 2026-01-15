@@ -1018,7 +1018,9 @@ export const ApiService = {
       const products = await backendGet<any[]>(`/api/v1/products?shopId=${encodeURIComponent(shopId)}`);
       return products.map(normalizeProductFromBackend);
     }
-    return [];
+    // Fetch all products when no shopId is provided
+    const products = await backendGet<any[]>('/api/v1/products');
+    return products.map(normalizeProductFromBackend);
   },
   getProductById: async (id: string) => {
     const product = await backendGet<any>(`/api/v1/products/${encodeURIComponent(id)}`);

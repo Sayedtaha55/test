@@ -1,13 +1,13 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
-import { RedisService } from './redis/redis.service';
+// import { RedisService } from './redis/redis.service';
 import { MonitoringService } from './monitoring/monitoring.service';
 
 @Injectable()
 export class ShopService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(RedisService) private readonly redis: RedisService,
+    // @Inject(RedisService) private readonly redis: RedisService,
     @Inject(MonitoringService) private readonly monitoring: MonitoringService
   ) {}
 
@@ -92,7 +92,7 @@ export class ShopService {
         },
       });
 
-      await this.redis.invalidateShopCache(updated.id, updated.slug);
+      // await this.redis.invalidateShopCache(updated.id, updated.slug);
 
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('update', 'shops', duration, true);
@@ -149,7 +149,7 @@ export class ShopService {
         data: { status: status as any },
       });
 
-      await this.redis.invalidateShopCache(updated.id, updated.slug);
+      // await this.redis.invalidateShopCache(updated.id, updated.slug);
 
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('update', 'shops', duration, true);
@@ -168,13 +168,13 @@ export class ShopService {
     
     try {
       // Try to get from cache first
-      const cachedShops = await this.redis.getShopsList();
-      if (cachedShops) {
-        const duration = Date.now() - startTime;
-        this.monitoring.trackCache('getShopsList', 'shops:list', true, duration);
-        this.monitoring.trackPerformance('getAllShops_cached', duration);
-        return cachedShops;
-      }
+      // const cachedShops = await this.redis.getShopsList();
+      // if (cachedShops) {
+      //   const duration = Date.now() - startTime;
+      //   this.monitoring.trackCache('getShopsList', 'shops:list', true, duration);
+      //   this.monitoring.trackPerformance('getAllShops_cached', duration);
+      //   return cachedShops;
+      // }
 
       // If not in cache, fetch from database
       const shops = await this.prisma.shop.findMany({
@@ -196,8 +196,7 @@ export class ShopService {
         },
       });
 
-      // Cache the result for 30 minutes
-      await this.redis.cacheShopsList(shops, 1800);
+      // await this.redis.cacheShopsList(shops, 1800);
       
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('findMany', 'shops', duration, true);
@@ -216,16 +215,16 @@ export class ShopService {
     
     try {
       // Try to get from cache first
-      const cachedShop = await this.redis.getShopBySlug(slug);
-      if (cachedShop) {
-        const duration = Date.now() - startTime;
-        this.monitoring.trackCache('getShopBySlug', `shop:slug:${slug}`, true, duration);
-        this.monitoring.trackPerformance('getShopBySlug_cached', duration);
+      // const cachedShop = await this.redis.getShopBySlug(slug);
+      // if (cachedShop) {
+      //   const duration = Date.now() - startTime;
+      //   this.monitoring.trackCache('getShopBySlug', `shop:slug:${slug}`, true, duration);
+      //   this.monitoring.trackPerformance('getShopBySlug_cached', duration);
         
         // Increment visitors counter asynchronously
-        this.incrementVisitors(cachedShop.id).catch(console.error);
-        return cachedShop;
-      }
+        // this.incrementVisitors(cachedShop.id).catch(console.error);
+        // return cachedShop;
+      // }
 
       // If not in cache, fetch from database
       const shop = await this.prisma.shop.findUnique({
@@ -255,10 +254,10 @@ export class ShopService {
 
       if (shop) {
         // Cache the shop data for 1 hour
-        await this.redis.cacheShop(shop.id, shop, 3600);
+        // await this.redis.cacheShop(shop.id, shop, 3600);
         
         // Increment visitors
-        await this.incrementVisitors(shop.id);
+        // await this.incrementVisitors(shop.id);
       }
 
       const duration = Date.now() - startTime;
@@ -288,7 +287,7 @@ export class ShopService {
       });
 
       // Update cache counter
-      await this.redis.incrementCounter(`shop:${shopId}:visitors`);
+      // await this.redis.incrementCounter(`shop:${shopId}:visitors`);
       
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('update', 'shops', duration, true);
@@ -359,7 +358,7 @@ export class ShopService {
         return { followed: true, shop: updatedShop };
       });
 
-      await this.redis.invalidateShopCache(result.shop.id, result.shop.slug);
+      // await this.redis.invalidateShopCache(result.shop.id, result.shop.slug);
 
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('transaction', 'shop_followers', duration, true);
@@ -386,7 +385,7 @@ export class ShopService {
       });
 
       // Invalidate cache for this shop
-      await this.redis.invalidateShopCache(shopId, updatedShop.slug);
+      // await this.redis.invalidateShopCache(shopId, updatedShop.slug);
       
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('update', 'shops', duration, true);
@@ -408,13 +407,13 @@ export class ShopService {
     
     try {
       // Try to get from cache first (cache for 5 minutes)
-      const cachedAnalytics = await this.redis.get(cacheKey);
-      if (cachedAnalytics) {
-        const duration = Date.now() - startTime;
-        this.monitoring.trackCache('getShopAnalytics', cacheKey, true, duration);
-        this.monitoring.trackPerformance('getShopAnalytics_cached', duration);
-        return cachedAnalytics;
-      }
+      // const cachedAnalytics = await this.redis.get(cacheKey);
+      // if (cachedAnalytics) {
+      //   const duration = Date.now() - startTime;
+      //   this.monitoring.trackCache('getShopAnalytics', cacheKey, true, duration);
+      //   this.monitoring.trackPerformance('getShopAnalytics_cached', duration);
+      //   return cachedAnalytics;
+      // }
 
       const now = new Date();
       const effectiveTo = to && !Number.isNaN(to.getTime()) ? to : now;
@@ -497,7 +496,7 @@ export class ShopService {
       };
 
       // Cache analytics for 5 minutes
-      await this.redis.set(cacheKey, result, 300);
+      // await this.redis.set(cacheKey, result, 300);
       
       const duration = Date.now() - startTime;
       this.monitoring.trackDatabase('findMany', 'orders', duration, true);
@@ -516,7 +515,7 @@ export class ShopService {
     const startTime = Date.now();
     
     try {
-      await this.redis.invalidateShopCache(shopId, slug);
+      // await this.redis.invalidateShopCache(shopId, slug);
       
       const duration = Date.now() - startTime;
       this.monitoring.trackCache('invalidateShopCache', `shop:${shopId}`, false, duration);
@@ -550,11 +549,11 @@ export class ShopService {
 
       // Cache popular shops
       for (const shop of popularShops) {
-        await this.redis.cacheShop(shop.id, shop, 3600);
+        // await this.redis.cacheShop(shop.id, shop, 3600);
       }
 
       // Cache shops list
-      await this.redis.cacheShopsList(popularShops, 1800);
+      // await this.redis.cacheShopsList(popularShops, 1800);
       
       const duration = Date.now() - startTime;
       this.monitoring.trackPerformance('warmCache', duration);

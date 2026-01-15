@@ -1,6 +1,13 @@
-
 import { Category, Shop, Offer, Product, Reservation } from './types';
 import { ApiService } from './services/api.service';
+
+export type ReceiptTheme = {
+  shopName?: string;
+  phone?: string;
+  address?: string;
+  logoDataUrl?: string;
+  footerNote?: string;
+};
 
 export const MOCK_SHOPS: Shop[] = [
   
@@ -93,6 +100,33 @@ export const RayDB = {
     localStorage.setItem('ray_favorites', JSON.stringify(favs));
     window.dispatchEvent(new Event('ray-db-update'));
     return idx === -1;
+  },
+  getReceiptTheme: (shopId: string): ReceiptTheme => {
+    try {
+      const sid = String(shopId || '').trim();
+      if (!sid) return {};
+      const raw = localStorage.getItem(`ray_receipt_theme:${sid}`);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  },
+  setReceiptTheme: (shopId: string, theme: ReceiptTheme) => {
+    const sid = String(shopId || '').trim();
+    if (!sid) return;
+    const safe: ReceiptTheme = theme && typeof theme === 'object' ? theme : {};
+    localStorage.setItem(`ray_receipt_theme:${sid}`,
+      JSON.stringify({
+        shopName: safe.shopName || '',
+        phone: safe.phone || '',
+        address: safe.address || '',
+        logoDataUrl: safe.logoDataUrl || '',
+        footerNote: safe.footerNote || '',
+      })
+    );
+    window.dispatchEvent(new Event('receipt-theme-update'));
   },
   followShop: async (shopId: string) => ApiService.followShop(shopId),
   updateProductStock: async (id: string, stock: number) => ApiService.updateProductStock(id, stock),

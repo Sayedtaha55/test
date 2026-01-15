@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
-import { Search, ShoppingCart, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react';
+import { Search, ShoppingCart, Plus, Minus, Trash2, ChevronRight, ChevronUp, CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ApiService } from '@/services/api.service';
+import { RayDB } from '@/constants';
 
 interface CartItem {
   id: string;
@@ -21,6 +21,8 @@ const POSSystem: React.FC<{ onClose: () => void; shopId: string }> = ({ onClose,
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [orderType, setOrderType] = useState<'dine-in' | 'takeaway'>('dine-in');
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [receiptTheme, setReceiptTheme] = useState<any>({});
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -32,6 +34,15 @@ const POSSystem: React.FC<{ onClose: () => void; shopId: string }> = ({ onClose,
       }
     };
     loadProducts();
+  }, [shopId]);
+
+  useEffect(() => {
+    const loadTheme = () => {
+      setReceiptTheme(RayDB.getReceiptTheme(shopId));
+    };
+    loadTheme();
+    window.addEventListener('receipt-theme-update', loadTheme);
+    return () => window.removeEventListener('receipt-theme-update', loadTheme);
   }, [shopId]);
 
   const addToCart = (product: any, qty: number = 1) => {
@@ -124,109 +135,135 @@ const POSSystem: React.FC<{ onClose: () => void; shopId: string }> = ({ onClose,
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-3 md:p-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 pb-4">
+        <div className="flex-1 overflow-y-auto p-1 md:p-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-1 md:gap-6 pb-24 md:pb-4">
           {filteredProducts.map(product => (
             <MotionDiv 
               whileTap={{ scale: 0.95 }}
               key={product.id}
-              className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-[#BD00FF] transition-all group flex flex-col items-center text-center relative active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => addToCart(product, 1)}
+              className="bg-white p-1 md:p-6 rounded-xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-[#BD00FF] transition-all group flex flex-col items-center text-center relative active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="w-full aspect-square rounded-xl md:rounded-[1.8rem] bg-slate-50 mb-4 md:mb-6 overflow-hidden">
+              <div className="w-full aspect-square rounded-lg md:rounded-[1.8rem] bg-slate-50 overflow-hidden">
                 {product.imageUrl ? (
                   <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-slate-100">
-                    <ShoppingCart className="w-12 h-12 text-slate-300" />
+                    <ShoppingCart className="w-8 h-8 md:w-12 md:h-12 text-slate-300" />
                   </div>
                 )}
               </div>
-              <h3 className="font-black text-base md:text-lg mb-2 truncate w-full">{product.name}</h3>
-              <p className="text-[#BD00FF] font-black text-base md:text-2xl mb-4">ج.م {product.price}</p>
-              <div className="flex gap-2 w-full">
-                <button
-                  onClick={(e) => { e.stopPropagation(); addToCart(product, 1); }}
-                  disabled={product.stock <= 0}
-                  className="flex-1 py-3 md:py-4 bg-[#BD00FF] text-white rounded-xl font-black text-sm md:text-base active:scale-95 transition-all disabled:opacity-50 min-h-[44px] touch-manipulation"
-                >
-                  {product.stock <= 0 ? 'نفد' : 'أضف'}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); addToCart(product, 2); }}
-                  disabled={product.stock <= 0}
-                  className="px-2 md:px-3 py-3 md:py-4 bg-slate-100 text-slate-700 rounded-xl font-black text-sm md:text-base active:scale-95 transition-all disabled:opacity-50 min-h-[44px] touch-manipulation"
-                >
-                  +2
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); addToCart(product, 3); }}
-                  disabled={product.stock <= 0}
-                  className="px-2 md:px-3 py-3 md:py-4 bg-slate-100 text-slate-700 rounded-xl font-black text-sm md:text-base active:scale-95 transition-all disabled:opacity-50 min-h-[44px] touch-manipulation"
-                >
-                  +3
-                </button>
-              </div>
-              <div className={`absolute top-3 left-3 md:top-6 md:left-6 px-2 py-0.5 rounded-lg text-[10px] md:text-[10px] font-black shadow-sm ${product.stock <= 0 ? 'bg-slate-900 text-white' : product.stock < 5 ? 'bg-red-500 text-white' : 'bg-white/90'}`}>
+              <p className="mt-1 text-[#BD00FF] font-black text-[11px] md:text-2xl">ج.م {product.price}</p>
+              <div className={`absolute top-2 left-2 md:top-6 md:left-6 px-2 py-0.5 rounded-lg text-[9px] md:text-[10px] font-black shadow-sm ${product.stock <= 0 ? 'bg-slate-900 text-white' : product.stock < 5 ? 'bg-red-500 text-white' : 'bg-white/90'}`}>
                 {product.stock <= 0 ? 'نفد' : (typeof product.stock === 'number' ? product.stock : '-')}
               </div>
             </MotionDiv>
           ))}
         </div>
+      </div>
 
-        <div className="md:hidden h-[45vh] bg-white border-t border-slate-200 flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div className="p-3 border-b border-slate-50 flex items-center justify-between flex-row-reverse">
-            <h2 className="text-base md:text-lg font-black flex items-center gap-3">
-              <ShoppingCart className="w-5 h-5 md:w-6 md:h-6 text-[#BD00FF]" /> الفاتورة
+      {/* Mobile: Invoice Bar + Full Screen Invoice */}
+      {!isInvoiceOpen && (
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-[250] bg-white border-t border-slate-200" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <button
+            type="button"
+            onClick={() => setIsInvoiceOpen(true)}
+            className="w-full p-3 flex items-center justify-between flex-row-reverse active:scale-[0.99]"
+          >
+            <h2 className="text-base font-black flex items-center gap-3">
+              <ShoppingCart className="w-5 h-5 text-[#BD00FF]" /> عرض الفاتورة
             </h2>
             <div className="flex items-center gap-2">
               <div className="px-2 py-1 bg-slate-900 text-white rounded-lg font-black text-xs">{cartCount}</div>
               <div className="font-black text-sm text-slate-900">ج.م {total.toFixed(0)}</div>
+              <ChevronUp className="w-5 h-5 text-slate-400 rotate-180" />
             </div>
-          </div>
-
-          <div className="p-3 border-b border-slate-50 space-y-3">
-            <div className="flex gap-2">
-              <button onClick={() => setOrderType('dine-in')} className={`flex-1 py-3 rounded-lg font-black text-sm transition-all active:scale-[0.96] min-h-[44px] touch-manipulation ${orderType === 'dine-in' ? 'bg-[#BD00FF] text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>محلي</button>
-              <button onClick={() => setOrderType('takeaway')} className={`flex-1 py-3 rounded-lg font-black text-sm transition-all active:scale-[0.96] min-h-[44px] touch-manipulation ${orderType === 'takeaway' ? 'bg-[#BD00FF] text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>سفري</button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-50">
-                <ShoppingCart className="w-12 h-12 mb-3 opacity-30" />
-                <p className="font-black text-sm">السلة فارغة</p>
-              </div>
-            ) : (
-              cart.map(item => (
-                <div key={item.id} className="bg-slate-50 p-3 rounded-xl flex items-center justify-between flex-row-reverse">
-                  <div className="text-right flex-1 pr-2">
-                    <p className="font-black text-sm text-slate-900 truncate">{item.name}</p>
-                    <p className="text-[10px] font-bold text-slate-400">ج.م {item.price}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-row-reverse">
-                    <div className="flex items-center bg-white rounded-lg p-1 shadow-sm border border-slate-100 flex-row-reverse">
-                      <button onClick={() => updateQuantity(item.id, -1)} className="p-2 hover:bg-slate-50 rounded-lg active:scale-95 min-h-[36px] w-[36px] flex items-center justify-center touch-manipulation"><Minus size={14} /></button>
-                      <span className="w-8 text-center font-black text-sm">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.id, 1)} className="p-2 hover:bg-slate-50 rounded-lg active:scale-95 min-h-[36px] w-[36px] flex items-center justify-center touch-manipulation"><Plus size={14} /></button>
-                    </div>
-                    <button onClick={() => removeFromCart(item.id)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-100 text-red-500 active:scale-95 min-h-[36px] w-[36px] flex items-center justify-center touch-manipulation"><Trash2 size={16} /></button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="p-3 bg-slate-50 border-t border-slate-200">
-            <button 
-              disabled={cart.length === 0 || isProcessing}
-              onClick={processPayment}
-              className="w-full py-4 bg-slate-900 text-white rounded-xl font-black text-base hover:bg-[#BD00FF] transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.97] min-h-[48px] touch-manipulation"
-            >
-              {isProcessing ? <Loader2 className="animate-spin" /> : 'تأكيد ودفع'}
-            </button>
-          </div>
+          </button>
         </div>
-      </div>
+      )}
+
+      <AnimatePresence>
+        {isInvoiceOpen && (
+          <MotionDiv
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="md:hidden fixed inset-0 z-[300] bg-white flex flex-col"
+            style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-row-reverse">
+              <button onClick={() => setIsInvoiceOpen(false)} className="p-3 hover:bg-slate-100 rounded-xl transition-all active:scale-95">
+                <ChevronRight className="w-6 h-6 text-slate-900" />
+              </button>
+              <div className="text-right">
+                <p className="font-black text-lg">الفاتورة</p>
+                <p className="text-xs font-bold text-slate-400">عدد الأصناف: {cartCount} • الإجمالي: ج.م {total.toFixed(0)}</p>
+              </div>
+              <div className="w-12" />
+            </div>
+
+            {(receiptTheme?.shopName || receiptTheme?.phone || receiptTheme?.address || receiptTheme?.logoDataUrl) && (
+              <div className="p-4 border-b border-slate-50">
+                <div className="flex items-center justify-between flex-row-reverse gap-4">
+                  <div className="text-right">
+                    {receiptTheme?.shopName && <p className="font-black text-base text-slate-900">{receiptTheme.shopName}</p>}
+                    {receiptTheme?.phone && <p className="text-xs font-bold text-slate-400">{receiptTheme.phone}</p>}
+                    {receiptTheme?.address && <p className="text-xs font-bold text-slate-400">{receiptTheme.address}</p>}
+                  </div>
+                  {receiptTheme?.logoDataUrl && (
+                    <img src={receiptTheme.logoDataUrl} className="w-14 h-14 rounded-3xl object-cover bg-white border border-slate-100" alt="receipt-logo" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="p-4 border-b border-slate-50">
+              <div className="flex gap-2">
+                <button onClick={() => setOrderType('dine-in')} className={`flex-1 py-3 rounded-xl font-black text-sm transition-all active:scale-[0.96] min-h-[44px] touch-manipulation ${orderType === 'dine-in' ? 'bg-[#BD00FF] text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>محلي</button>
+                <button onClick={() => setOrderType('takeaway')} className={`flex-1 py-3 rounded-xl font-black text-sm transition-all active:scale-[0.96] min-h-[44px] touch-manipulation ${orderType === 'takeaway' ? 'bg-[#BD00FF] text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>سفري</button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {cart.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
+                  <ShoppingCart className="w-16 h-16 mb-4 opacity-30" />
+                  <p className="font-black text-base">السلة فارغة</p>
+                </div>
+              ) : (
+                cart.map(item => (
+                  <div key={item.id} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between flex-row-reverse">
+                    <div className="text-right flex-1 pr-2">
+                      <p className="font-black text-sm text-slate-900">{item.name}</p>
+                      <p className="text-[11px] font-bold text-slate-400">ج.م {item.price}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-row-reverse">
+                      <div className="flex items-center bg-white rounded-xl p-1 shadow-sm border border-slate-100 flex-row-reverse">
+                        <button onClick={() => updateQuantity(item.id, -1)} className="p-2 hover:bg-slate-50 rounded-xl active:scale-95 min-h-[40px] w-[40px] flex items-center justify-center touch-manipulation"><Minus size={16} /></button>
+                        <span className="w-10 text-center font-black text-sm">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(item.id, 1)} className="p-2 hover:bg-slate-50 rounded-xl active:scale-95 min-h-[40px] w-[40px] flex items-center justify-center touch-manipulation"><Plus size={16} /></button>
+                      </div>
+                      <button onClick={() => removeFromCart(item.id)} className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-red-500 active:scale-95 min-h-[40px] w-[40px] flex items-center justify-center touch-manipulation"><Trash2 size={18} /></button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200">
+              {receiptTheme?.footerNote && (
+                <div className="pb-3 text-center text-xs font-bold text-slate-400">{receiptTheme.footerNote}</div>
+              )}
+              <button
+                disabled={cart.length === 0 || isProcessing}
+                onClick={processPayment}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-[#BD00FF] transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.97] min-h-[52px] touch-manipulation"
+              >
+                {isProcessing ? <Loader2 className="animate-spin" /> : 'تأكيد ودفع'}
+              </button>
+            </div>
+          </MotionDiv>
+        )}
+      </AnimatePresence>
 
       <div className="hidden md:flex md:w-[450px] lg:w-[500px] h-full bg-white border-r border-slate-100 flex-col shadow-2xl" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="p-8 border-b border-slate-50 flex items-center justify-between flex-row-reverse">
@@ -234,6 +271,21 @@ const POSSystem: React.FC<{ onClose: () => void; shopId: string }> = ({ onClose,
             <ShoppingCart className="w-8 h-8 text-[#BD00FF]" /> الفاتورة
           </h2>
         </div>
+
+        {(receiptTheme?.shopName || receiptTheme?.phone || receiptTheme?.address || receiptTheme?.logoDataUrl) && (
+          <div className="p-6 border-b border-slate-50">
+            <div className="flex items-center justify-between flex-row-reverse gap-6">
+              <div className="text-right">
+                {receiptTheme?.shopName && <p className="font-black text-lg text-slate-900">{receiptTheme.shopName}</p>}
+                {receiptTheme?.phone && <p className="text-xs font-bold text-slate-400">{receiptTheme.phone}</p>}
+                {receiptTheme?.address && <p className="text-xs font-bold text-slate-400">{receiptTheme.address}</p>}
+              </div>
+              {receiptTheme?.logoDataUrl && (
+                <img src={receiptTheme.logoDataUrl} className="w-16 h-16 rounded-3xl object-cover bg-white border border-slate-100" alt="receipt-logo" />
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="p-6 border-b border-slate-50 space-y-4">
           <div className="flex gap-2">
@@ -273,6 +325,9 @@ const POSSystem: React.FC<{ onClose: () => void; shopId: string }> = ({ onClose,
             <span className="font-black text-slate-400">الإجمالي</span>
             <span className="text-4xl font-black text-[#BD00FF]">ج.م {total.toFixed(0)}</span>
           </div>
+          {receiptTheme?.footerNote && (
+            <div className="text-center text-xs font-bold text-slate-400">{receiptTheme.footerNote}</div>
+          )}
           <button 
             disabled={cart.length === 0 || isProcessing}
             onClick={processPayment}

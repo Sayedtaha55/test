@@ -1,20 +1,20 @@
 import { Injectable, Inject, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
-import { RedisService } from './redis/redis.service';
+// import { RedisService } from './redis/redis.service';
 
 @Injectable()
 export class ProductService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(RedisService) private readonly redis: RedisService,
+    // @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
   async getById(id: string) {
     if (!id) {
       throw new BadRequestException('id مطلوب');
     }
-    const cached = await this.redis.getProduct(id);
-    if (cached) return cached;
+    // const cached = await this.redis.getProduct(id);
+    // if (cached) return cached;
 
     const product = await this.prisma.product.findUnique({
       where: { id },
@@ -24,7 +24,7 @@ export class ProductService {
       throw new NotFoundException('لم يتم العثور على المنتج');
     }
 
-    await this.redis.cacheProduct(id, product, 3600);
+    // await this.redis.cacheProduct(id, product, 3600);
     return product;
   }
 
@@ -53,9 +53,9 @@ export class ProductService {
     });
 
     const shop = await this.prisma.shop.findUnique({ where: { id: input.shopId }, select: { id: true, slug: true } });
-    await this.redis.invalidateProductCache(created.id);
+    // await this.redis.invalidateProductCache(created.id);
     if (shop) {
-      await this.redis.invalidateShopCache(shop.id, shop.slug);
+      // await this.redis.invalidateShopCache(shop.id, shop.slug);
     }
 
     return created;
@@ -85,9 +85,9 @@ export class ProductService {
     });
 
     const shop = await this.prisma.shop.findUnique({ where: { id: existing.shopId }, select: { id: true, slug: true } });
-    await this.redis.invalidateProductCache(productId);
+    // await this.redis.invalidateProductCache(productId);
     if (shop) {
-      await this.redis.invalidateShopCache(shop.id, shop.slug);
+      // await this.redis.invalidateShopCache(shop.id, shop.slug);
     }
 
     return updated;
@@ -114,9 +114,9 @@ export class ProductService {
     });
 
     const shop = await this.prisma.shop.findUnique({ where: { id: existing.shopId }, select: { id: true, slug: true } });
-    await this.redis.invalidateProductCache(productId);
+    // await this.redis.invalidateProductCache(productId);
     if (shop) {
-      await this.redis.invalidateShopCache(shop.id, shop.slug);
+      // await this.redis.invalidateShopCache(shop.id, shop.slug);
     }
 
     return deleted;
